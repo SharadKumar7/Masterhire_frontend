@@ -4,6 +4,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
 import Loader from '../../components/common/Loader'; 
 import { useSignup } from '../../context/SignupContext'; 
+import { useAuth } from "../../context/AuthContext";
+const apiUrl = import.meta.env.VITE_API_URL;
 
 
 const LoginContent = () => {
@@ -13,32 +15,65 @@ const LoginContent = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    startLoading();
-    try {
-      const response = await fetch('https://jsonplaceholder.typicode.com/posts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
-      if (response.ok) {
-        await stopLoading();
-        navigate('/dashboard');
+const { login } = useAuth();
+
+const handleLogin = async (e) => {
+  e.preventDefault();
+  setError("");
+  startLoading();
+
+  try {
+    const res = await login(formData.email, formData.password);
+
+    console.log("Login response:", res);
+
+    if (res.success) {
+      if (res.role === "freelancer") {
+        navigate("/freelancer/dashboard");
+      } else {
+        navigate("/client/dashboard");
       }
-    } catch (err) {
-      await stopLoading();
-      setError('Login failed');
+    } else {
+      setError(res.message || "Login failed");
     }
-  };
+
+  } catch (err) {
+    setError("Something went wrong");
+  } finally {
+    stopLoading();
+  }
+};
 
   const googleLogin = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      console.log('Access Token:', tokenResponse.access_token);
-      navigate('/dashboard');
-    },
-    onError: () => setError('Google Sign-In failed'),
-  });
+  onSuccess: async (tokenResponse) => {
+    try {
+      const res = await fetch("YOUR_BACKEND_API/google-login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          token: tokenResponse.access_token,
+        }),
+      });
+
+      const data = await res.json();
+
+      const userData = data.user;
+
+      login(userData);
+
+      if (userData.role === "freelancer") {
+        navigate("/dashboard/find-jobs");
+      } else {
+        navigate("/dashboard/my-jobs");
+      }
+
+    } catch {
+      setError("Google login failed");
+    }
+  },
+});
 
   return (
     <> 
@@ -93,7 +128,7 @@ const LoginContent = () => {
         </form>
 
         <div className="mt-2 flex justify-end">
-          <Link to="/forgot-password" className="text-teal-600 hover:text-teal-700">Forget Password?</Link>
+          <Link to="/forgetpassword" className="text-teal-600 hover:text-teal-700">Forget Password?</Link>
         </div>
 
         <div className="flex items-center my-6">

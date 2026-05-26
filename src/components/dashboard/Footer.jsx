@@ -1,67 +1,71 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 const Footer = () => {
-    return (
-        <footer className="bg-gray-800 mt-12">
-            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
-                    {/* MasterHire Section */}
-                    <div>
-                        <h4 className="text-white font-bold mb-4">MasterHire</h4>
-                        <ul className="space-y-3">
-                            {['About', 'Our Impact', 'Selly & Security'].map(item => (
-                                <li key={item}>
-                                    <a href="#" className="text-gray-400 hover:text-white text-sm">
-                                        {item}
-                                    </a>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
+  return (
+    <footer className="bg-black text-white max-w-6xl mx-auto py-12 px-6 md:px-16 rounded-t-[30px]">
+      {/* Changed gap-8 to gap-4 for tighter columns */}
+      <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        
+        {/* Brand */}
+        <div className="flex flex-col gap-3">
+          <h2 className="text-xl font-bold font-jaro">MasterHire</h2>
+          <ul className="space-y-1 text-sm text-gray-400">
+            <li><Link to='/terms-of-service' className="hover:text-white transition">Terms Of Services</Link></li>
+            <li><Link to='/privacy-policy' className="hover:text-white transition">Privacy Policy</Link></li>
+          </ul>
+        </div>
 
-                    {/* Footer Nav Links */}
-                    <div>
-                        <h4 className="text-white font-bold mb-4">Footer Nav</h4>
-                        <ul className="space-y-3">
-                             {['Terms Of Services', 'Privacy & Security', 'Community', 'About Us', 'How It Works', 'Our Project'].map(item => (
-                                <li key={item}>
-                                    <a href="#" className="text-gray-400 hover:text-white text-sm">
-                                        {item}
-                                    </a>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
+        {/* About */}
+        <div className="flex flex-col gap-3">
+          <h3 className="font-semibold text-lg">About</h3>
+          <ul className="space-y-1 text-sm text-gray-400">
+            <li><Link to='/about' className="hover:text-white transition">About Us</Link></li>
+            <li><Link to='/how-it-works' className="hover:text-white transition">How It Works</Link></li>
+            <li><Link to='/our-impact' className="hover:text-white transition">Our Impact</Link></li>
+          </ul>
+        </div>
 
-                    {/* Join Newsletter & Follow Us */}
-                    <div className="md:col-span-2">
-                        <h4 className="text-white font-bold mb-4">Join Our Newsletter</h4>
-                        <form className="flex">
-                            <input 
-                                type="email" 
-                                placeholder="Your email address" 
-                                className="w-full p-3 rounded-l-lg outline-none text-gray-800" 
-                            />
-                            <button type="submit" className="bg-teal-600 hover:bg-teal-700 text-white p-3 rounded-r-lg font-semibold">
-                                Subscribe
-                            </button>
-                        </form>
-                        <h4 className="text-white font-bold mt-8 mb-4">FOLLOW US ON:</h4>
-                        {/* Placeholder for social media icons */}
-                        <div className="flex space-x-4">
-                            <div className="w-8 h-8 bg-gray-700 rounded text-gray-400 flex items-center justify-center">F</div>
-                            <div className="w-8 h-8 bg-gray-700 rounded text-gray-400 flex items-center justify-center">T</div>
-                            <div className="w-8 h-8 bg-gray-700 rounded text-gray-400 flex items-center justify-center">L</div>
-                        </div>
-                    </div>
-                </div>
+        {/* Support */}
+        <div className="flex flex-col gap-3">
+          <h3 className="font-semibold text-lg">Support</h3>
+          <ul className="space-y-1 text-sm text-gray-400">
+            <li><Link to='/help-support' className="hover:text-white transition">Help & Support</Link></li>
+            <li><Link to='/safety-security' className="hover:text-white transition">Safety & Security</Link></li>
+            <li><Link to='/feedback' className="hover:text-white transition">Feedback</Link></li>
+          </ul>
+        </div>
 
-                <div className="border-t border-gray-700 pt-6 mt-6">
-                    <p className="text-gray-500 text-sm text-center">&copy; {new Date().getFullYear()} MasterHire. All rights reserved.</p>
-                </div>
+        {/* Newsletter - No extra margin/padding to keep it close */}
+        <div className="flex flex-col gap-5">
+          <div>
+            <h3 className="font-semibold text-lg mb-2">Join Our Newsletter</h3>
+            <div className="flex">
+              <input 
+                type="email" 
+                placeholder="Email" 
+                className="bg-[#1a1a1a] text-xs border-none rounded-l-lg px-3 py-2 w-full focus:ring-1 focus:ring-teal-500 outline-none"
+              />
+              <button className="bg-teal-600 hover:bg-teal-500 text-white px-3 py-2 rounded-r-lg text-xs font-medium transition">
+                Submit
+              </button>
             </div>
-        </footer>
-    );
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Follow us:</span>
+            <div className="flex gap-2">
+              <div className="w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center text-[10px] cursor-pointer hover:scale-110 transition">in</div>
+              <div className="w-7 h-7 bg-gray-800 rounded-full flex items-center justify-center text-[10px] cursor-pointer hover:scale-110 transition">X</div>
+              <div className="w-7 h-7 bg-gradient-to-tr from-yellow-400 to-purple-600 rounded-full flex items-center justify-center text-[10px] cursor-pointer hover:scale-110 transition">ig</div>
+              <div className="w-7 h-7 bg-blue-700 rounded-full flex items-center justify-center text-[10px] cursor-pointer hover:scale-110 transition">f</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </footer>
+  );
 };
 
 export default Footer;

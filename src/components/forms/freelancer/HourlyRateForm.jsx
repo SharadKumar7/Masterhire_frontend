@@ -1,17 +1,17 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const HourlyRatePage = () => {
   const navigate = useNavigate();
-  const [hourlyRate, setHourlyRate] = useState('20');
+  const [hourlyRate, setHourlyRate] = useState("20");
 
   const handleBack = () => {
-    navigate('/experience'); 
+    navigate("/signup/experience");
   };
 
-  const handlenext = () => {
+  const handleNext = () => {
     console.log("Saving hourly rate:", hourlyRate);
-    navigate('/welcome');
+    navigate("/signup/welcome");
   };
 
   return (
@@ -24,20 +24,21 @@ const HourlyRatePage = () => {
           Set your Hourly Rate
         </h2>
         <p className="text-gray-600 mb-10">
-          Set your hourly rate based on your skills and experience. You can adjust it later as your profile grows.
+          Set your hourly rate based on your skills and experience. You can
+          adjust it later as your profile grows.
         </p>
 
         <div className="flex items-center justify-between border-t border-b border-gray-100 py-8 mb-20">
-          
           <div className="flex flex-col">
-            <label htmlFor="hourly-rate" className="text-lg font-semibold text-gray-800">
+            <label
+              htmlFor="hourly-rate"
+              className="text-lg font-semibold text-gray-800"
+            >
               Hourly Rate
             </label>
-            <p className="text-gray-500 text-sm">
-              The amount you'll receive.
-            </p>
+            <p className="text-gray-500 text-sm">The amount you'll receive.</p>
           </div>
-          
+
           <div className="flex items-center">
             <input
               type="number"
@@ -64,7 +65,7 @@ const HourlyRatePage = () => {
         </button>
         <button
           type="button"
-          onClick={handlenext}
+          onClick={handleNext}
           className="bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 px-12 rounded-lg shadow-md transition duration-150 ease-in-out"
         >
           Complete your Profile

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Mail, ArrowLeft } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
+const apiUrl = import.meta.env.VITE_API_URL;
 
 const ForgotPasswordPage = () => {
   const [email, setEmail] = useState('');
@@ -16,7 +17,7 @@ const ForgotPasswordPage = () => {
 
     try {
       // Replace with your actual demo backend endpoint
-      const response = await fetch('https://jsonplaceholder.typicode.com', {
+      const response = await fetch('https://jsonplaceholder.typicode.com/posts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),

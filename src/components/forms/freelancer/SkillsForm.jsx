@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { X, AlertCircle } from 'lucide-react';
-import { useSignup } from '../../../context/SignupContext'; 
-import Loader from '../../common/Loader'; 
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { X, AlertCircle } from "lucide-react";
+import { useSignup } from "../../../context/SignupContext";
+import Loader from "../../common/Loader";
 
 const SkillSelection = () => {
   const navigate = useNavigate();
-  const { signupData, updateSignupData, progress, startLoading, stopLoading } = useSignup();
+  const { signupData, updateSignupData, progress, startLoading, stopLoading , nextStep} =
+    useSignup();
 
   const [skills, setSkills] = useState(signupData.skills || []);
-  const [inputValue, setInputValue] = useState('');
+  const [inputValue, setInputValue] = useState("");
   const [error, setError] = useState(false);
   const MAX_SKILLS = 10;
 
@@ -19,66 +20,56 @@ const SkillSelection = () => {
   };
 
   const handleInputKeyDown = (e) => {
-    if (e.key === 'Enter' && inputValue.trim() !== '') {
+    if (e.key === "Enter" && inputValue.trim() !== "") {
       e.preventDefault();
       const newSkill = inputValue.trim();
 
       if (skills.length < MAX_SKILLS && !skills.includes(newSkill)) {
         const updatedSkills = [...skills, newSkill];
         setSkills(updatedSkills);
-        updateSignupData({ skills: updatedSkills }); 
-        setInputValue('');
+        updateSignupData({ skills: updatedSkills });
+        setInputValue("");
         setError(false);
       }
     }
   };
 
   const removeSkill = (skillToRemove) => {
-    const updatedSkills = skills.filter(skill => skill !== skillToRemove);
+    const updatedSkills = skills.filter((skill) => skill !== skillToRemove);
     setSkills(updatedSkills);
-    updateSignupData({ skills: updatedSkills }); 
+    updateSignupData({ skills: updatedSkills });
   };
 
-  const handleNext = async (e) => {
-    e.preventDefault();
+  const handleNext = (e) => {
+  e.preventDefault();
 
-    if (skills.length === 0) {
-      setError(true);
-      return;
-    }
+  if (skills.length === 0) {
+    setError(true);
+    return;
+  }
 
-    startLoading(); 
+  startLoading();
 
-    try {
-      const response = await fetch('https://jsonplaceholder.typicode.com/posts', {
-        method: 'POST',
-        body: JSON.stringify({ skills: skills }),
-        headers: { 'Content-type': 'application/json; charset=UTF-8' },
-      });
+  // Save in context
+  updateSignupData({ skills });
 
-      if (response.ok) {
-        await stopLoading(); 
-        navigate('/bio'); 
-      } else {
-        await stopLoading();
-        alert("Server error. Please try again.");
-      }
-    } catch (err) {
-      await stopLoading();
-      alert("Network error. Check your connection.");
-    }
-  };
+  setTimeout(() => {
+    stopLoading();
+      nextStep();
+    navigate("/signup/freelancer/bio");
+  }, 400);
+};
 
   const handleBack = async () => {
     startLoading();
     await stopLoading();
-    navigate('/domain'); 
+    navigate("/signup/freelancer/domain");
   };
 
   return (
     <>
       <Loader progress={progress} />
-      
+
       <div className="min-h-screen bg-white flex flex-col justify-center items-center p-4">
         <header className="absolute top-4 left-4">
           <h1 className="text-3xl font-jaro text-gray-800">MasterHire</h1>
@@ -89,12 +80,15 @@ const SkillSelection = () => {
             Add your skills -
           </h2>
           <p className="text-gray-600 mb-8">
-            Add the specific skills you actively use in your work so clients can understand what you truly offer.
+            Add the specific skills you actively use in your work so clients can
+            understand what you truly offer.
           </p>
 
           <form className="space-y-6" onSubmit={handleNext}>
             <div>
-              <div className={`relative transition-all ${error ? 'p-1 bg-red-50 rounded-lg' : ''}`}>
+              <div
+                className={`relative transition-all ${error ? "p-1 bg-red-50 rounded-lg" : ""}`}
+              >
                 <input
                   type="text"
                   placeholder="Enter skills here (e.g. React, UI Design)"
@@ -102,33 +96,46 @@ const SkillSelection = () => {
                   onChange={handleInputChange}
                   onKeyDown={handleInputKeyDown}
                   className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-teal-500 outline-none transition-all ${
-                    error ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    error ? "border-red-500 bg-red-50" : "border-gray-300"
                   }`}
                   disabled={skills.length >= MAX_SKILLS}
                 />
               </div>
               <div className="flex justify-between mt-2">
-                 <p className="text-xs text-gray-400 italic">Press "Enter" to add a skill</p>
-                 <p className={`text-sm ${skills.length >= MAX_SKILLS ? 'text-red-500 font-bold' : 'text-gray-500'}`}>
-                   {skills.length}/{MAX_SKILLS} skills
-                 </p>
+                <p className="text-xs text-gray-400 italic">
+                  Press "Enter" to add a skill
+                </p>
+                <p
+                  className={`text-sm ${skills.length >= MAX_SKILLS ? "text-red-500 font-bold" : "text-gray-500"}`}
+                >
+                  {skills.length}/{MAX_SKILLS} skills
+                </p>
               </div>
-              
+
               {error && (
                 <div className="flex items-center gap-1 mt-2 text-red-500">
                   <AlertCircle className="w-4 h-4" />
-                  <p className="text-sm font-medium"> Please add at least one skill to continue.</p>
+                  <p className="text-sm font-medium">
+                    {" "}
+                    Please add at least one skill to continue.
+                  </p>
                 </div>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">Your skills</label>
-              <div className={`min-h-[120px] p-4 border rounded-xl bg-gray-50/50 flex flex-wrap gap-2 content-start transition-colors ${
-                error ? 'border-red-300' : 'border-gray-300'
-              }`}>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Your skills
+              </label>
+              <div
+                className={`min-h-[120px] p-4 border rounded-xl bg-gray-50/50 flex flex-wrap gap-2 content-start transition-colors ${
+                  error ? "border-red-300" : "border-gray-300"
+                }`}
+              >
                 {skills.length === 0 && (
-                  <span className="text-gray-400 text-sm italic">No skills added yet...</span>
+                  <span className="text-gray-400 text-sm italic">
+                    No skills added yet...
+                  </span>
                 )}
                 {skills.map((skill) => (
                   <div
