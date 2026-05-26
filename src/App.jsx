@@ -11,7 +11,7 @@ import { JobPostProvider } from "./context/JobPostContext";
 
 /* ───────────────────────── PUBLIC PAGES ──────────────────────── */
 import About from "./pages/public/About";
-import FeedBack from "./pages/public/FeedBack";
+import FeedBack from "./pages/public/Feedback";
 import HelpSupport from "./pages/public/HelpSupport";
 import HowItWorks from "./pages/public/HowItWorks";
 import Landingpage from "./pages/public/Landingpage";
