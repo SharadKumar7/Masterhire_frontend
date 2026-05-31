@@ -2,153 +2,163 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Send, Check, Search, MoreVertical, ArrowLeft, Loader2, Clock,
+  Paperclip, Image, File, Download, X, MessageSquare,
 } from "lucide-react";
 import { apiFetch, ErrorBanner, Avatar } from "./Shared";
 
+const BASE_URL = import.meta.env.VITE_API_URL;
+
 const MessagesSection = ({ jobId, initialChatUser = null }) => {
-  const [conversations, setConversations] = useState([]);
+  const [applicants, setApplicants]     = useState([]);  // all applicants list
   const [loadingConvs, setLoadingConvs] = useState(true);
-  const [selectedConv, setSelectedConv] = useState(null); // { userId, name, photo, email }
-  const [messages, setMessages] = useState([]);
-  const [loadingMsgs, setLoadingMsgs] = useState(false);
-  const [msgError, setMsgError] = useState(null);
-  const [text, setText] = useState("");
-  const [sending, setSending] = useState(false);
-  const [search, setSearch] = useState("");
+  const [selectedConv, setSelectedConv] = useState(null);
+  const [messages, setMessages]         = useState([]);
+  const [loadingMsgs, setLoadingMsgs]   = useState(false);
+  const [msgError, setMsgError]         = useState(null);
+  const [text, setText]                 = useState("");
+  const [sending, setSending]           = useState(false);
+  const [search, setSearch]             = useState("");
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [filePreview, setFilePreview]   = useState(null);
+  const [unreadMap, setUnreadMap]       = useState({});
+  const [lastMsgMap, setLastMsgMap]     = useState({});
+
   const messagesEndRef = useRef(null);
-  const pollRef = useRef(null);
+  const fileInputRef   = useRef(null);
+  const pollRef        = useRef(null);
 
-  // Auto-scroll to bottom
-  const scrollToBottom = () =>
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const isRejected = selectedConv?.status === "rejected";
+  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 
-  // Fetch conversation list — merges existing message threads with ALL applicants
-  const fetchConversations = useCallback(async () => {
+  // ── Fetch all applicants ────────────────────────────────────────────────────
+  const fetchApplicants = useCallback(async () => {
     try {
       setLoadingConvs(true);
 
-      const [convRes, appRes] = await Promise.allSettled([
-        apiFetch(`/api/client/messages/conversations?jobId=${jobId}`),
-        apiFetch(`/api/client/job-applications/${jobId}`),
-      ]);
+      // Get all applications for this job
+      const appRes = await apiFetch(`/api/client/job-applications/${jobId}`);
+      const apps   = appRes.applications || [];
 
-      const existingConvs = convRes.status === "fulfilled"
-        ? (convRes.value.conversations || []) : [];
+      // Get conversation metadata (last message, unread)
+      let convMeta = [];
+      try {
+        const convRes = await apiFetch(`/api/client/messages/conversations?jobId=${jobId}`);
+        convMeta = convRes.conversations || [];
+      } catch (_) {}
 
-      const applicants = appRes.status === "fulfilled"
-        ? (appRes.value.applications || []) : [];
-
-      const convMap = new Map();
-      existingConvs.forEach((c) => convMap.set(c.userId, c));
-
-      applicants.forEach((app) => {
-        const uid = app.user?._id;
-        if (uid && !convMap.has(uid)) {
-          convMap.set(uid, {
-            userId:        uid,
-            name:          app.user?.name,
-            photo:         app.user?.photo,
-            email:         app.user?.email,
-            lastMessage:   null,
-            lastMessageAt: null,
-            unread:        0,
-            status:        app.status,
-          });
-        } else if (uid && convMap.has(uid)) {
-          convMap.set(uid, { ...convMap.get(uid), status: app.status });
-        }
+      // Build lookup maps
+      const unread  = {};
+      const lastMsg = {};
+      convMeta.forEach((c) => {
+        unread[c.userId]  = c.unread || 0;
+        lastMsg[c.userId] = { text: c.lastMessage, time: c.lastMessageAt };
       });
+      setUnreadMap(unread);
+      setLastMsgMap(lastMsg);
 
-      const merged = Array.from(convMap.values());
-      setConversations(merged);
+      // Map applications to conv objects
+      const list = apps.map((app) => ({
+        userId: app.user?._id?.toString(),
+        name:    app.user?.name,
+        photo:   app.user?.photo,
+        email:   app.user?.email,
+        status:  app.status,
+        skills:  app.user?.skills || [],
+        bidAmount: app.bidAmount,
+      })).filter((c) => !!c.userId);
 
+      setApplicants(list);
+
+      // Auto-select if initialChatUser passed
       if (initialChatUser && !selectedConv) {
-        const match = merged.find((c) => c.userId === initialChatUser.user?._id);
-        if (match) {
-          setSelectedConv(match);
-        } else {
-          setSelectedConv({
-            userId: initialChatUser.user?._id,
-            name:   initialChatUser.user?.name,
-            photo:  initialChatUser.user?.photo,
-            email:  initialChatUser.user?.email,
-          });
-        }
+        const uid   = initialChatUser.user?._id;
+        const match = list.find((c) => c.userId === uid);
+        if (match) setSelectedConv(match);
       }
     } catch (e) {
-      console.error(e);
+      console.error("fetchApplicants error", e);
     } finally {
       setLoadingConvs(false);
     }
   }, [jobId]); // eslint-disable-line
 
-  // Fetch messages for selected conversation
-  const fetchMessages = useCallback(
-    async (userId) => {
-      try {
-        setLoadingMsgs(true);
-        setMsgError(null);
-        // GET /api/client/messages/:userId?jobId=...
-        const res = await apiFetch(
-          `/api/client/messages/${userId}?jobId=${jobId}`
-        );
-        setMessages(res.messages || []);
-        setTimeout(scrollToBottom, 100);
-      } catch (e) {
-        setMsgError(e.message);
-      } finally {
-        setLoadingMsgs(false);
-      }
-    },
-    [jobId]
-  );
+  // ── Fetch messages for selected conv ───────────────────────────────────────
+  const fetchMessages = useCallback(async (userId) => {
+    try {
+      setLoadingMsgs(true);
+      setMsgError(null);
+      const res = await apiFetch(`/api/client/messages/${userId}?jobId=${jobId}`);
+      setMessages(res.messages || []);
+      setTimeout(scrollToBottom, 100);
+    } catch (e) {
+      setMsgError(e.message);
+    } finally {
+      setLoadingMsgs(false);
+    }
+  }, [jobId]);
 
-  useEffect(() => {
-    fetchConversations();
-  }, [fetchConversations]);
+  useEffect(() => { fetchApplicants(); }, [fetchApplicants]);
 
   useEffect(() => {
     if (!selectedConv) return;
     fetchMessages(selectedConv.userId);
-    // Poll every 5s for new messages
-    pollRef.current = setInterval(
-      () => fetchMessages(selectedConv.userId),
-      5000
-    );
+    pollRef.current = setInterval(() => fetchMessages(selectedConv.userId), 5000);
     return () => clearInterval(pollRef.current);
   }, [selectedConv, fetchMessages]);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  useEffect(() => { scrollToBottom(); }, [messages]);
 
+  // ── Send message ────────────────────────────────────────────────────────────
   const handleSend = async (e) => {
     e.preventDefault();
-    if (!text.trim() || !selectedConv) return;
+    if ((!text.trim() && !selectedFile) || !selectedConv || isRejected) return;
+
     const optimistic = {
-      _id: Date.now().toString(),
-      text: text.trim(),
-      senderId: "me",
-      createdAt: new Date().toISOString(),
-      pending: true,
+      _id:        Date.now().toString(),
+      text:       text.trim(),
+      senderId:   "me",
+      senderRole: "client",
+      createdAt:  new Date().toISOString(),
+      pending:    true,
+      fileUrl:    filePreview,
+      fileName:   selectedFile?.name,
+      fileType:   selectedFile
+        ? selectedFile.type.startsWith("image/") ? "image"
+        : selectedFile.type.startsWith("video/") ? "video"
+        : "document" : null,
     };
+
     setMessages((prev) => [...prev, optimistic]);
+    const sentText = text.trim();
+    const sentFile = selectedFile;
     setText("");
+    setSelectedFile(null);
+    setFilePreview(null);
     setSending(true);
     setTimeout(scrollToBottom, 50);
+
     try {
-      // POST /api/client/messages
-      await apiFetch("/api/client/messages", {
-        method: "POST",
-        body: JSON.stringify({
-          receiverId: selectedConv.userId,
-          jobId,
-          text: optimistic.text,
-        }),
-      });
-      // Replace optimistic with real
+      if (sentFile) {
+        const formData = new FormData();
+        formData.append("receiverId", selectedConv.userId);
+        formData.append("jobId", jobId);
+        if (sentText) formData.append("text", sentText);
+        formData.append("file", sentFile);
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${BASE_URL}/api/client/messages`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+        if (!res.ok) throw new Error("Failed to send");
+      } else {
+        await apiFetch("/api/client/messages", {
+          method: "POST",
+          body: JSON.stringify({ receiverId: selectedConv.userId, jobId, text: sentText }),
+        });
+      }
       await fetchMessages(selectedConv.userId);
-      await fetchConversations();
+      await fetchApplicants();
     } catch (e) {
       setMessages((prev) => prev.filter((m) => m._id !== optimistic._id));
       alert(`Failed to send: ${e.message}`);
@@ -157,104 +167,128 @@ const MessagesSection = ({ jobId, initialChatUser = null }) => {
     }
   };
 
-  const filteredConvs = conversations.filter((c) =>
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSelectedFile(file);
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (ev) => setFilePreview(ev.target.result);
+      reader.readAsDataURL(file);
+    } else {
+      setFilePreview(null);
+    }
+  };
+
+  const filtered = applicants.filter((c) =>
     c.name?.toLowerCase().includes(search.toLowerCase())
   );
 
   const formatTime = (iso) => {
+    if (!iso) return "";
     const d = new Date(iso);
     const now = new Date();
-    if (d.toDateString() === now.toDateString()) {
-      return d.toLocaleTimeString("en-IN", {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    }
+    if (d.toDateString() === now.toDateString())
+      return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
     return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
   };
 
-  return (
-    <div className="flex h-[600px] border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm">
+  const statusLabel = {
+    accepted:    { text: "Hired",          color: "bg-green-50 text-green-600 border-green-200" },
+    rejected:    { text: "Rejected",       color: "bg-red-50 text-red-500 border-red-200" },
+    negotiation: { text: "Negotiation",    color: "bg-blue-50 text-blue-600 border-blue-200" },
+    pending:     { text: "Applied",        color: "bg-yellow-50 text-yellow-600 border-yellow-200" },
+  };
 
-      {/* ── Left Panel: Conversation List ──────────────────────────────────── */}
-      <div
-        className={`flex flex-col border-r border-gray-100 ${
-          selectedConv
-            ? "hidden md:flex w-72 shrink-0"
-            : "flex w-full md:w-72 md:shrink-0"
-        }`}
-      >
-        {/* Header */}
+  const FilePreviewBubble = ({ msg }) => {
+    if (!msg.fileUrl) return null;
+    if (msg.fileType === "image") {
+      return (
+        <img src={msg.fileUrl} alt={msg.fileName}
+          className="max-w-[200px] rounded-xl mt-1 cursor-pointer hover:opacity-90"
+          onClick={() => window.open(msg.fileUrl, "_blank")}
+        />
+      );
+    }
+    return (
+      <a href={msg.fileUrl} download={msg.fileName} target="_blank" rel="noreferrer"
+        className="flex items-center gap-2 mt-1 bg-white/20 hover:bg-white/30 px-3 py-2 rounded-xl transition">
+        <File size={14} />
+        <p className="text-xs font-semibold truncate">{msg.fileName || "File"}</p>
+        <Download size={12} className="shrink-0" />
+      </a>
+    );
+  };
+
+  return (
+    <div className="flex h-[620px] border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm">
+
+      {/* ── Left Panel: Applicants List ── */}
+      <div className={`flex flex-col border-r border-gray-100 ${
+        selectedConv ? "hidden md:flex w-72 shrink-0" : "flex w-full md:w-72 md:shrink-0"
+      }`}>
         <div className="px-4 py-4 border-b border-gray-100 bg-gray-50">
           <h3 className="font-bold text-gray-900 text-base mb-3">Messages</h3>
           <div className="relative">
-            <Search
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-            />
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search..."
+              placeholder="Search applicant..."
               className="w-full pl-8 pr-3 py-2 bg-white border border-gray-200 rounded-full text-xs focus:outline-none focus:border-teal-400"
             />
           </div>
         </div>
 
-        {/* Conversation list */}
         <div className="flex-1 overflow-y-auto">
           {loadingConvs ? (
             <div className="flex items-center justify-center py-10">
               <Loader2 size={20} className="animate-spin text-teal-500" />
             </div>
-          ) : filteredConvs.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">
-              <Send size={28} className="mx-auto mb-2 opacity-30" />
-              <p className="text-xs font-medium">No conversations yet</p>
-              <p className="text-[11px] mt-1">Hire a freelancer to start chatting</p>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-12 text-gray-400 px-4">
+              <MessageSquare size={28} className="mx-auto mb-2 opacity-30" />
+              <p className="text-xs font-medium">No applicants yet</p>
             </div>
           ) : (
-            filteredConvs.map((conv) => {
-              const isActive = selectedConv?.userId === conv.userId;
+            filtered.map((conv) => {
+              const isActive  = selectedConv?.userId === conv.userId;
+              const sl        = statusLabel[conv.status] || statusLabel.pending;
+              const unread    = unreadMap[conv.userId] || 0;
+              const last      = lastMsgMap[conv.userId];
+
               return (
                 <button
                   key={conv.userId}
                   onClick={() => setSelectedConv(conv)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left border-b border-gray-50 ${
+                  className={`w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition-colors text-left border-b border-gray-50 ${
                     isActive ? "bg-teal-50 border-l-2 border-l-teal-500" : ""
                   }`}
                 >
+                  {/* Avatar + unread badge */}
                   <div className="relative shrink-0">
                     <Avatar name={conv.name} photo={conv.photo} size="md" />
-                    {conv.unread > 0 && (
+                    {unread > 0 && (
                       <span className="absolute -top-1 -right-1 w-4 h-4 bg-teal-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-                        {conv.unread > 9 ? "9+" : conv.unread}
+                        {unread > 9 ? "9+" : unread}
                       </span>
                     )}
                   </div>
+
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="font-semibold text-gray-900 text-sm truncate">
-                        {conv.name}
-                      </p>
-                      <span className="text-[10px] text-gray-400 shrink-0 ml-1">
-                        {conv.lastMessageAt ? formatTime(conv.lastMessageAt) : ""}
+                    <div className="flex items-center justify-between gap-1">
+                      <p className="font-semibold text-sm text-gray-900 truncate">{conv.name}</p>
+                      <span className="text-[10px] text-gray-400 shrink-0">
+                        {last?.time ? formatTime(last.time) : ""}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <p className="text-xs text-gray-400 truncate">
-                        {conv.lastMessage || "No messages yet"}
+                    <div className="flex items-center justify-between mt-0.5 gap-1">
+                      <p className="text-xs text-gray-400 truncate flex-1">
+                        {last?.text || "No messages yet"}
                       </p>
-                      {conv.status && (
-                        <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${
-                          conv.status === "accepted"    ? "bg-green-50 text-green-600 border-green-200" :
-                          conv.status === "rejected"    ? "bg-red-50 text-red-500 border-red-200" :
-                          conv.status === "negotiation" ? "bg-blue-50 text-blue-600 border-blue-200" :
-                          "bg-yellow-50 text-yellow-600 border-yellow-200"
-                        }`}>
-                          {conv.status}
-                        </span>
-                      )}
+                      <span className={`shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${sl.color}`}>
+                        {sl.text}
+                      </span>
                     </div>
                   </div>
                 </button>
@@ -264,40 +298,42 @@ const MessagesSection = ({ jobId, initialChatUser = null }) => {
         </div>
       </div>
 
-      {/* ── Right Panel: Chat Window ───────────────────────────────────────── */}
+      {/* ── Right Panel: Chat ── */}
       {selectedConv ? (
         <div className="flex-1 flex flex-col min-w-0">
-          {/* Chat Header */}
+          {/* Header */}
           <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-white shrink-0">
-            <button
-              className="md:hidden mr-1 text-gray-500"
-              onClick={() => setSelectedConv(null)}
-            >
+            <button className="md:hidden mr-1 text-gray-500" onClick={() => setSelectedConv(null)}>
               <ArrowLeft size={18} />
             </button>
             <Avatar name={selectedConv.name} photo={selectedConv.photo} size="md" />
             <div className="flex-1 min-w-0">
-              <p className="font-bold text-gray-900 text-sm">{selectedConv.name}</p>
+              <div className="flex items-center gap-2">
+                <p className="font-bold text-gray-900 text-sm">{selectedConv.name}</p>
+                {isRejected && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-red-500">
+                    Rejected
+                  </span>
+                )}
+              </div>
               <p className={`text-xs font-medium ${
                 selectedConv.status === "accepted"    ? "text-green-500" :
-                selectedConv.status === "rejected"    ? "text-red-400" :
-                selectedConv.status === "negotiation" ? "text-blue-500" :
+                selectedConv.status === "rejected"    ? "text-red-400"   :
+                selectedConv.status === "negotiation" ? "text-blue-500"  :
                 "text-yellow-500"
               }`}>
-                {selectedConv.status === "accepted"    ? "Hired Freelancer" :
-                 selectedConv.status === "rejected"    ? "Rejected" :
-                 selectedConv.status === "negotiation" ? "In Negotiation" :
+                {selectedConv.status === "accepted"    ? "Hired Freelancer"     :
+                 selectedConv.status === "rejected"    ? "Application Rejected" :
+                 selectedConv.status === "negotiation" ? "In Negotiation"       :
                  "Applied"}
               </p>
             </div>
-            <div className="flex items-center gap-2 text-gray-400">
-              <button className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                <MoreVertical size={16} />
-              </button>
-            </div>
+            <button className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400">
+              <MoreVertical size={16} />
+            </button>
           </div>
 
-          {/* Messages Area */}
+          {/* Messages */}
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2 bg-[#f0f4f8]">
             {loadingMsgs ? (
               <div className="flex items-center justify-center h-full">
@@ -310,16 +346,15 @@ const MessagesSection = ({ jobId, initialChatUser = null }) => {
                 <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center mb-3 shadow-sm">
                   <Send size={20} className="opacity-30" />
                 </div>
-                <p className="text-sm font-medium">Say hello!</p>
+                <p className="text-sm font-medium">No messages yet</p>
                 <p className="text-xs mt-1">
-                  Start the conversation with your freelancer
+                  {isRejected ? "This applicant was rejected" : "Start the conversation"}
                 </p>
               </div>
             ) : (
               <>
                 {messages.map((msg, idx) => {
-                  const isMe =
-                    msg.senderId === "me" || msg.senderRole === "client";
+                  const isMe = msg.senderId === "me" || msg.senderRole === "client";
                   const showDate =
                     idx === 0 ||
                     new Date(msg.createdAt).toDateString() !==
@@ -330,53 +365,26 @@ const MessagesSection = ({ jobId, initialChatUser = null }) => {
                         <div className="flex justify-center my-2">
                           <span className="text-[10px] text-gray-500 bg-white px-3 py-1 rounded-full shadow-sm">
                             {new Date(msg.createdAt).toLocaleDateString("en-IN", {
-                              weekday: "short",
-                              day: "numeric",
-                              month: "short",
+                              weekday: "short", day: "numeric", month: "short",
                             })}
                           </span>
                         </div>
                       )}
-                      <div
-                        className={`flex ${isMe ? "justify-end" : "justify-start"}`}
-                      >
-                        {!isMe && (
-                          <Avatar
-                            name={selectedConv.name}
-                            photo={selectedConv.photo}
-                            size="sm"
-                          />
-                        )}
-                        <div
-                          className={`max-w-[65%] mx-2 ${
-                            isMe ? "items-end" : "items-start"
-                          } flex flex-col`}
-                        >
-                          <div
-                            className={`px-3 py-2 rounded-2xl text-sm shadow-sm ${
-                              isMe
-                                ? `bg-teal-600 text-white rounded-br-sm ${
-                                    msg.pending ? "opacity-70" : ""
-                                  }`
-                                : "bg-white text-gray-800 rounded-bl-sm"
-                            }`}
-                          >
-                            <p className="leading-relaxed">{msg.text}</p>
+                      <div className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                        {!isMe && <Avatar name={selectedConv.name} photo={selectedConv.photo} size="sm" />}
+                        <div className={`max-w-[65%] mx-2 flex flex-col ${isMe ? "items-end" : "items-start"}`}>
+                          <div className={`px-3 py-2 rounded-2xl text-sm shadow-sm ${
+                            isMe
+                              ? `bg-teal-600 text-white rounded-br-sm ${msg.pending ? "opacity-70" : ""}`
+                              : "bg-white text-gray-800 rounded-bl-sm"
+                          }`}>
+                            {msg.text && <p className="leading-relaxed">{msg.text}</p>}
+                            <FilePreviewBubble msg={msg} />
                           </div>
-                          <div
-                            className={`flex items-center gap-1 mt-0.5 ${
-                              isMe ? "flex-row-reverse" : ""
-                            }`}
-                          >
-                            <span className="text-[10px] text-gray-400">
-                              {formatTime(msg.createdAt)}
-                            </span>
-                            {isMe && !msg.pending && (
-                              <Check size={10} className="text-teal-500" />
-                            )}
-                            {isMe && msg.pending && (
-                              <Clock size={10} className="text-gray-300" />
-                            )}
+                          <div className={`flex items-center gap-1 mt-0.5 ${isMe ? "flex-row-reverse" : ""}`}>
+                            <span className="text-[10px] text-gray-400">{formatTime(msg.createdAt)}</span>
+                            {isMe && !msg.pending && <Check size={10} className="text-teal-500" />}
+                            {isMe &&  msg.pending && <Clock size={10} className="text-gray-300" />}
                           </div>
                         </div>
                         {isMe && <div className="w-8 shrink-0" />}
@@ -389,54 +397,80 @@ const MessagesSection = ({ jobId, initialChatUser = null }) => {
             )}
           </div>
 
-          {/* Input Bar */}
+          {/* File Preview Bar */}
+          {selectedFile && !isRejected && (
+            <div className="flex items-center gap-3 px-4 py-2.5 bg-teal-50 border-t border-teal-100 shrink-0">
+              {filePreview ? (
+                <img src={filePreview} alt="preview" className="w-10 h-10 rounded-lg object-cover" />
+              ) : (
+                <div className="w-10 h-10 bg-white rounded-lg border border-teal-200 flex items-center justify-center">
+                  <File size={16} className="text-teal-600" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-teal-800 truncate">{selectedFile.name}</p>
+                <p className="text-[10px] text-teal-500">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+              </div>
+              <button onClick={() => { setSelectedFile(null); setFilePreview(null); }} className="text-teal-500 hover:text-teal-700">
+                <X size={16} />
+              </button>
+            </div>
+          )}
+
+          {/* Input */}
           <form
             onSubmit={handleSend}
-            className="flex items-end gap-2 px-4 py-3 border-t border-gray-100 bg-white shrink-0"
+            className={`flex items-end gap-2 px-4 py-3 border-t border-gray-100 bg-white shrink-0 transition-opacity ${
+              isRejected ? "opacity-40 pointer-events-none select-none" : ""
+            }`}
           >
+            <button type="button" onClick={() => fileInputRef.current?.click()}
+              className="p-2 text-gray-400 hover:text-teal-600 transition shrink-0">
+              <Paperclip size={18} />
+            </button>
+            <input ref={fileInputRef} type="file"
+              accept="image/*,video/*,.pdf,.doc,.docx,.zip,.txt"
+              className="hidden" onChange={handleFileSelect} />
+            <button type="button"
+              onClick={() => {
+                const inp = document.createElement("input");
+                inp.type = "file"; inp.accept = "image/*";
+                inp.onchange = (e) => handleFileSelect(e);
+                inp.click();
+              }}
+              className="p-2 text-gray-400 hover:text-teal-600 transition shrink-0">
+              <Image size={18} />
+            </button>
             <div className="flex-1 flex items-end bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2 focus-within:border-teal-400 transition-colors">
               <textarea
                 value={text}
                 onChange={(e) => {
                   setText(e.target.value);
                   e.target.style.height = "auto";
-                  e.target.style.height =
-                    Math.min(e.target.scrollHeight, 100) + "px";
+                  e.target.style.height = Math.min(e.target.scrollHeight, 100) + "px";
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend(e);
-                  }
+                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(e); }
                 }}
-                placeholder="Type a message..."
+                placeholder={isRejected ? "Messaging disabled" : "Type a message..."}
                 rows={1}
                 className="flex-1 bg-transparent text-sm outline-none resize-none max-h-24 leading-relaxed"
               />
             </div>
-            <button
-              type="submit"
-              disabled={!text.trim() || sending}
-              className="w-10 h-10 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-200 text-white rounded-full flex items-center justify-center transition-colors shrink-0"
-            >
-              {sending ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <Send size={16} />
-              )}
+            <button type="submit"
+              disabled={(!text.trim() && !selectedFile) || sending || isRejected}
+              className="w-10 h-10 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-200 text-white rounded-full flex items-center justify-center transition-colors shrink-0">
+              {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
             </button>
           </form>
         </div>
       ) : (
-        /* Empty state when no conversation selected (desktop) */
-        <div className="hidden md:flex flex-1 flex-col items-center justify-center text-gray-400 bg-[#f0f4f8]">
+        <div className="hidden md:flex flex-1 flex-col items-center justify-center text-gray-400 bg-gray-50/50">
           <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm">
-            <Send size={28} className="opacity-30" />
+            <MessageSquare size={28} className="opacity-30" />
           </div>
-          <p className="text-base font-semibold text-gray-500">
-            Select a conversation
-          </p>
-          <p className="text-sm mt-1">Choose a freelancer to start messaging</p>
+          <p className="text-base font-semibold text-gray-500">Select a conversation</p>
+          <p className="text-sm mt-1">Choose an applicant to start messaging</p>
         </div>
       )}
     </div>

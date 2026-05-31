@@ -99,7 +99,6 @@ const LanguageSelection = () => {
       ...signupData,
       languages: languages,
     };
-    console.log("Final data to submit:", finalData);
     const response = await fetch(`${apiUrl}/api/auth/complete-profile`, {
       method: "POST",
       headers: {

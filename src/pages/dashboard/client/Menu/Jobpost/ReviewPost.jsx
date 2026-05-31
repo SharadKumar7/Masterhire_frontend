@@ -43,8 +43,6 @@ const ReviewJobPost = () => {
       status,
     };
 
-    console.log("FINAL DATA:", formattedData);
-
     const response = await fetch(
       `${apiUrl}/api/jobs/post-job`,
       {

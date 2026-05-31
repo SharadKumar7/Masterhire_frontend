@@ -58,7 +58,7 @@ const AppliedJobsPage = () => {
 
   const handleGoToApplication = (e, id) => {
     e.stopPropagation();
-    navigate(`/freelancer/dashboard/application-status/${id}`);
+    navigate(`/freelancer/dashboard/applications/${id}`);
   };
 
   if (loading) return <div className="p-20 text-center text-teal-600 font-bold">Loading Applied Jobs...</div>;
@@ -73,7 +73,7 @@ const AppliedJobsPage = () => {
           appliedJobs.map((job) => (
             <div
               key={job._id}
-              onClick={() => navigate(`/freelancer/dashboard/job-details/${job._id}`)}
+              onClick={() => navigate(`/freelancer/dashboard/applications/${job._id}`)}
               className="group relative bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer"
             >
               {/* 2. 3-Dot Menu */}
@@ -88,7 +88,7 @@ const AppliedJobsPage = () => {
                 {openMenuId === job.id && (
                   <div 
                     className="absolute right-0 top-full mt-2 w-48 bg-white border border-gray-100 shadow-xl rounded-xl z-10 py-2 animate-in fade-in zoom-in duration-100"
-                    onClick={(e) => handleGoToApplication(e, job.id)}
+                    onClick={(e) => handleGoToApplication(e, job._id)}
                   >
                     <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-600 font-medium">
                       Go to application

@@ -61,6 +61,10 @@ import SavedProfiles from "./pages/dashboard/client/Menu/SavedProfiles";
 import ClientApplication from "./pages/dashboard/client/projectAppilcation/ApplicationBody";
 import ProjectEditJob from "./pages/dashboard/client/projectAppilcation/ProjectEditJob";
 import WorkspacePage from "./pages/dashboard/client/workspace/ProjectWorkspaceBody";
+import YourContracts from "./pages/dashboard/client/Menu/YourContracts";
+import ClientTransactionSummary from "./pages/dashboard/client/Menu/TransactionSummary";
+import ClientProjectHistory from "./pages/dashboard/client/Menu/ProjectHistory";
+import ProposalsBids from "./pages/dashboard/client/Menu/JobBiding";
 
 /* ─────────────────── FREELANCER DASHBOARD ────────────────────── */
 import FreelancerDashboard from "./pages/dashboard/freelancer/FreelancerDashboard";
@@ -69,13 +73,16 @@ import FreelancerAccountSettings from "./pages/dashboard/freelancer/AccountSetti
 
 import ActiveContractsPage from "./pages/dashboard/freelancer/Menu/ActiveContracts";
 import AppliedJobsPage from "./pages/dashboard/freelancer/Menu/AppliedJob";
-import ProfilePage from "./pages/dashboard/freelancer/Menu/Profile";
+import ProfilePage from "./pages/dashboard/freelancer/Menu/profile/FreelaancerProfile";
 import SavedJobsPage from "./pages/dashboard/freelancer/Menu/SavedJob";
 import SearchJob from "./pages/dashboard/freelancer/Menu/SearchJob";
 
-import JobApplication from "./pages/dashboard/freelancer/JobApplication";
-import JobDetailsPage from "./pages/dashboard/freelancer/JobDetailsPage";
+import JobApplication from "./pages/dashboard/freelancer/jobAplplication/JobApplication";
 import Workspace from "./pages/dashboard/freelancer/workspace/WorkspaceBody";
+import TransactionSummary from "./pages/dashboard/freelancer/Menu/TransctionSummary/TransactionSummary";
+import ContractHistory from "./pages/dashboard/freelancer/Menu/ContractHistory";
+import ProjectHistory from "./pages/dashboard/freelancer/Menu/ProjectHistory";
+import ProposalsOffers from "./pages/dashboard/freelancer/Menu/Proposal&Offers";
 
 /* ───────────────────────── SHARED PAGES ──────────────────────── */
 import ResourceHelp from "./pages/dashboard/shared/ResourceHelp";
@@ -269,6 +276,23 @@ const App = () => {
                     path="saved-profiles"
                     element={<SavedProfiles />}
                   />
+                  <Route
+                    path="contracts"
+                    element={<YourContracts />}
+                   />
+                  <Route
+                    path="transactions"
+                    element={<ClientTransactionSummary />}
+                   />
+                  <Route
+                    path="project-history"
+                    element={<ClientProjectHistory />}
+                   />
+                  <Route
+                    path="proposals-bids"
+                    element={<ProposalsBids />}
+                   />
+                   
                 </Route>
               </Route>
 
@@ -287,11 +311,6 @@ const App = () => {
                   />
 
                   <Route path="workspace/:id" element={<Workspace />} />
-
-                  <Route
-                    path="job-details/:id"
-                    element={<JobDetailsPage />}
-                  />
 
                   <Route path="filter" element={<SearchJob />} />
 
@@ -316,6 +335,25 @@ const App = () => {
                     path="applications/:id"
                     element={<JobApplication />}
                   />
+
+                  <Route
+                    path="transaction-summary"
+                    element={<TransactionSummary />}
+                  />
+
+                  <Route
+                    path="contract-history"
+                    element={<ContractHistory />}
+                  />
+
+                  <Route
+                  path="project-history"
+                  element={<ProjectHistory />}
+                />
+                  <Route
+                    path="proposals-offers"
+                    element={<ProposalsOffers />}
+                   />
                 </Route>
               </Route>
             </Route>

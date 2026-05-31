@@ -83,7 +83,7 @@ const SavedJobsPage = () => {
           <div
             key={job._id}
             // 4. Navigate to details page on card click
-            onClick={() => navigate(`/freelancer/dashboard/job-details/${job._id}`)}
+            onClick={() => navigate(`/freelancer/dashboard/applications/${job._id}`)}
             className="group relative bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer"
           >
             {/* Unsave Heart Logic */}

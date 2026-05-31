@@ -94,13 +94,13 @@ const Header = () => {
       label: "Deliver work",
       options: [
         { name: "Active contracts", path: "contracts" },
-        { name: "Contract history", path: "history" },
+        { name: "Contract history", path: "contract-history" },
       ],
     },
     {
       label: "Reports",
       options: [
-        { name: "Transaction summary", path: "transactions" },
+        { name: "Transaction summary", path: "transaction-summary" },
         { name: "Project history", path: "project-history" },
       ],
     },

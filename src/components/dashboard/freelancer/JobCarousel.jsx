@@ -44,7 +44,7 @@ const JobCarousel = () => {
     } catch (error) {
       console.error("Failed to track view", error);
     }
-    navigate(`job-details/${jobId}`);
+    navigate(`applications/${jobId}`);
   };
 
   const scroll = (direction) => {

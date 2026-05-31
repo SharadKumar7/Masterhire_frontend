@@ -7,7 +7,8 @@ import {
   Check,
 } from "lucide-react";
 import { io } from "socket.io-client";
-import formatTimeAgo from "../../../components/dashboard/formatTimeAgo";
+import formatTimeAgo from "../../../../components/dashboard/formatTimeAgo";
+import ApplicationTab from "./Negotiation"; // ✅ alag file se import
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const BASE_URL = import.meta.env.VITE_API_URL;
@@ -69,22 +70,6 @@ const Avatar = ({ name = "", size = "md", photo = "" }) => {
     <div className={`${sizes[size]} rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold shrink-0`}>
       {name?.charAt(0)?.toUpperCase() || "U"}
     </div>
-  );
-};
-
-// ─── Status Badge ─────────────────────────────────────────────────────────────
-const StatusBadge = ({ status }) => {
-  const config = {
-    pending:     { color: "bg-yellow-50 text-yellow-600 border-yellow-200", label: "Pending Review" },
-    negotiation: { color: "bg-blue-50 text-blue-600 border-blue-200",       label: "In Negotiation" },
-    accepted:    { color: "bg-green-50 text-green-600 border-green-200",    label: "Accepted" },
-    rejected:    { color: "bg-red-50 text-red-500 border-red-200",          label: "Rejected" },
-  };
-  const c = config[status] || config.pending;
-  return (
-    <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${c.color}`}>
-      {c.label}
-    </span>
   );
 };
 
@@ -185,12 +170,9 @@ const JobDetailsTab = ({ job, isApplied, isRejected, isSaved, onApply, onSave, b
 
       {/* Action Buttons */}
       <div className="flex justify-center mt-12 gap-2 pt-8 border-t border-gray-50">
-        {/* ✅ Rejected state — disabled button */}
         {isRejected ? (
-          <button
-            disabled
-            className="flex-1 min-w-[160px] m-auto max-w-[260px] font-bold py-3.5 rounded-xl bg-gray-200 text-gray-400 cursor-not-allowed"
-          >
+          <button disabled
+            className="flex-1 min-w-[160px] m-auto max-w-[260px] font-bold py-3.5 rounded-xl bg-gray-200 text-gray-400 cursor-not-allowed">
             Application Rejected
           </button>
         ) : (
@@ -200,19 +182,16 @@ const JobDetailsTab = ({ job, isApplied, isRejected, isSaved, onApply, onSave, b
               isApplied
                 ? "bg-red-500 hover:bg-red-600 text-white"
                 : "bg-teal-600 hover:bg-teal-700 text-white shadow-teal-100"
-            }`}
-          >
+            }`}>
             {isApplied ? "Cancel Application" : "Apply to the job"}
           </button>
         )}
-        <button
-          onClick={onSave}
+        <button onClick={onSave}
           className={`flex-1 min-w-[160px] m-auto max-w-[260px] border-2 font-bold py-3.5 rounded-xl transition-all ${
             isSaved
               ? "border-teal-600 text-teal-600 bg-teal-50"
               : "border-gray-200 text-gray-700 hover:bg-gray-50"
-          }`}
-        >
+          }`}>
           {isSaved ? "Job Saved" : "Save job"}
         </button>
       </div>
@@ -236,8 +215,7 @@ const JobDetailsTab = ({ job, isApplied, isRejected, isSaved, onApply, onSave, b
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                 <span className="text-gray-500 font-bold">₹</span>
               </div>
-              <input
-                type="number" value={bidAmount}
+              <input type="number" value={bidAmount}
                 onChange={(e) => setBidAmount(e.target.value)}
                 disabled={!job.isNegotiable}
                 className={`w-full border-none rounded-xl py-4 pl-8 pr-12 font-bold text-gray-800 text-lg ${
@@ -248,10 +226,8 @@ const JobDetailsTab = ({ job, isApplied, isRejected, isSaved, onApply, onSave, b
                 <Pencil size={18} className="text-gray-400" />
               </div>
             </div>
-            <button
-              onClick={() => { onApply(bidAmount); setShowModal(false); }}
-              className="w-full bg-[#1b4b43] hover:bg-[#143a34] text-white font-bold py-4 rounded-2xl transition-all shadow-md active:scale-95 text-sm"
-            >
+            <button onClick={() => { onApply(bidAmount); setShowModal(false); }}
+              className="w-full bg-[#1b4b43] hover:bg-[#143a34] text-white font-bold py-4 rounded-2xl transition-all shadow-md active:scale-95 text-sm">
               Submit application
             </button>
           </div>
@@ -286,178 +262,7 @@ const JobDetailsTab = ({ job, isApplied, isRejected, isSaved, onApply, onSave, b
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ─── TAB 2: Application Status ────────────────────────────────────────────────
-// ═══════════════════════════════════════════════════════════════════════════════
-const ApplicationTab = ({ jobId }) => {
-  const [application, setApplication] = useState(null);
-  const [loading, setLoading]         = useState(true);
-  const [error, setError]             = useState(null);
-  const [negotiateMode, setNegotiateMode] = useState(false);
-  const [newBid, setNewBid]           = useState("");
-  const [submitting, setSubmitting]   = useState(false);
-  const [successMsg, setSuccessMsg]   = useState("");
-
-  const loadApplication = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const res = await apiFetch(`/api/freelancer/application/${jobId}`);
-      setApplication(res.application);
-      setNewBid(res.application?.bidAmount?.toString() || "");
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [jobId]);
-
-  useEffect(() => { loadApplication(); }, [loadApplication]);
-
-  const handleNegotiate = async (e) => {
-    e.preventDefault();
-    if (!newBid || isNaN(Number(newBid))) { alert("Please enter a valid amount"); return; }
-    try {
-      setSubmitting(true);
-      await apiFetch(`/api/freelancer/application/${application._id}/negotiate`, {
-        method: "PATCH",
-        body: JSON.stringify({ bidAmount: Number(newBid) }),
-      });
-      setSuccessMsg("Counter offer sent successfully!");
-      setNegotiateMode(false);
-      await loadApplication();
-      setTimeout(() => setSuccessMsg(""), 3000);
-    } catch (e) {
-      alert(`Error: ${e.message}`);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  if (loading) return <Spinner text="Loading your application..." />;
-  if (error)   return <ErrorBanner message={error} />;
-  if (!application) return (
-    <div className="text-center py-16 text-gray-400 text-sm">
-      <Briefcase size={32} className="mx-auto mb-3 opacity-30" />
-      No application found for this job
-    </div>
-  );
-
-  // ✅ Negotiate only allowed for pending/negotiation (not rejected/accepted)
-  const canNegotiate = ["pending", "negotiation"].includes(application.status);
-  const updatedAt = application.updatedAt
-    ? new Date(application.updatedAt).toLocaleString("en-IN", {
-        day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-      })
-    : "";
-
-  return (
-    <div className="space-y-5">
-      {successMsg && (
-        <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 rounded-xl px-4 py-3 text-sm">
-          <CheckCircle2 size={16} /> {successMsg}
-        </div>
-      )}
-
-      <div className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-2xl p-4">
-        <div>
-          <p className="text-xs text-gray-400 mb-1">Application Status</p>
-          <StatusBadge status={application.status} />
-        </div>
-        {updatedAt && <p className="text-[11px] text-gray-400">Updated {updatedAt}</p>}
-      </div>
-
-      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-        <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-3">Your Bid</p>
-        <div className="flex items-end justify-between">
-          <div>
-            <p className="text-3xl font-bold text-gray-900">₹{application.bidAmount?.toLocaleString("en-IN")}</p>
-            <p className="text-xs text-gray-400 mt-1">Proposed amount</p>
-          </div>
-          {canNegotiate && !negotiateMode && (
-            <button onClick={() => setNegotiateMode(true)}
-              className="flex items-center gap-1.5 text-sm font-semibold text-teal-600 hover:text-teal-700 border border-teal-200 px-3 py-1.5 rounded-lg hover:bg-teal-50 transition-colors">
-              <PencilLine size={14} /> Edit Offer
-            </button>
-          )}
-        </div>
-      </div>
-
-      {application.status === "pending" && !negotiateMode && (
-        <div className="w-full py-5 px-6 border border-gray-100 bg-gray-50 text-center rounded-xl shadow-sm">
-          <Clock size={20} className="mx-auto text-yellow-400 mb-2" />
-          <p className="text-sm text-gray-500 italic">The client is yet to review your application</p>
-        </div>
-      )}
-
-      {application.status === "negotiation" && !negotiateMode && (
-        <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5">
-          <div className="flex items-center gap-2 mb-2">
-            <ChevronRight size={16} className="text-blue-500" />
-            <p className="text-sm font-semibold text-blue-700">Negotiation in progress</p>
-          </div>
-          <p className="text-xs text-blue-500">The client has initiated negotiation. You can send a counter offer below.</p>
-        </div>
-      )}
-
-      {application.status === "accepted" && (
-        <div className="bg-green-50 border border-green-200 rounded-2xl p-5 flex items-center gap-4">
-          <BadgeCheck size={32} className="text-green-500 shrink-0" />
-          <div>
-            <p className="font-bold text-green-700 text-sm">Congratulations! You've been hired.</p>
-            <p className="text-xs text-green-500 mt-0.5">The client has accepted your application.</p>
-          </div>
-        </div>
-      )}
-
-      {/* ✅ Rejected state */}
-      {application.status === "rejected" && (
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-5 flex items-center gap-4">
-          <Ban size={28} className="text-red-400 shrink-0" />
-          <div>
-            <p className="font-bold text-red-600 text-sm">Application Rejected</p>
-            <p className="text-xs text-red-400 mt-0.5">The client has rejected your application.</p>
-          </div>
-        </div>
-      )}
-
-      {negotiateMode && (
-        <form onSubmit={handleNegotiate} className="bg-white border border-teal-200 rounded-2xl p-5 shadow-sm space-y-4">
-          <p className="text-sm font-semibold text-gray-700">Send Counter Offer</p>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-sm">₹</span>
-            <input type="number" value={newBid} onChange={(e) => setNewBid(e.target.value)}
-              placeholder="Your proposed amount"
-              className="w-full border border-gray-200 rounded-xl pl-7 pr-4 py-2.5 text-sm focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-              required autoFocus
-            />
-          </div>
-          <div className="flex gap-3">
-            <button type="button" onClick={() => setNegotiateMode(false)}
-              className="flex-1 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-semibold hover:bg-gray-50 transition-colors">
-              Cancel
-            </button>
-            <button type="submit" disabled={submitting}
-              className="flex-1 bg-teal-600 hover:bg-teal-700 text-white py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-60">
-              {submitting ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-              {submitting ? "Sending..." : "Submit Offer"}
-            </button>
-          </div>
-        </form>
-      )}
-
-      {application.proposal && (
-        <div className="bg-gray-50 border border-gray-100 rounded-2xl p-5">
-          <p className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-2">Your Proposal</p>
-          <p className="text-sm text-gray-600 leading-relaxed">{application.proposal}</p>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // ─── TAB 3: Messages ──────────────────────────────────────────────────────────
-// isRejected → show chat history but block new messages
 // ═══════════════════════════════════════════════════════════════════════════════
 const MessagesTab = ({ jobId, clientInfo, isRejected }) => {
   const [messages, setMessages]         = useState([]);
@@ -495,7 +300,6 @@ const MessagesTab = ({ jobId, clientInfo, isRejected }) => {
     const socket = getSocket();
     socketRef.current = socket;
     socket.emit("join_room", jobId);
-
     socket.on("receive_message", (msg) => {
       setMessages((prev) => [...prev, msg]);
       setTimeout(scrollToBottom, 50);
@@ -519,7 +323,7 @@ const MessagesTab = ({ jobId, clientInfo, isRejected }) => {
   const handleSend = async (e) => {
     e?.preventDefault();
     if (!text.trim() && !selectedFile) return;
-    if (isRejected) return; // extra safety
+    if (isRejected) return;
 
     const optimistic = {
       _id:        Date.now().toString(),
@@ -533,8 +337,7 @@ const MessagesTab = ({ jobId, clientInfo, isRejected }) => {
       fileType:   selectedFile
         ? selectedFile.type.startsWith("image/") ? "image"
         : selectedFile.type.startsWith("video/") ? "video"
-        : "document"
-        : null,
+        : "document" : null,
     };
 
     setMessages((prev) => [...prev, optimistic]);
@@ -560,7 +363,6 @@ const MessagesTab = ({ jobId, clientInfo, isRejected }) => {
       });
       if (!res.ok) throw new Error("Failed to send");
       const data = await res.json();
-
       setMessages((prev) => prev.map((m) => m._id === optimistic._id ? data.message : m));
       socketRef.current?.emit("new_message", { jobId, message: data.message });
     } catch (e) {
@@ -611,8 +413,6 @@ const MessagesTab = ({ jobId, clientInfo, isRejected }) => {
 
   return (
     <div className="flex flex-col h-[600px] border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm">
-
-      {/* Chat Header */}
       <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100 bg-white shrink-0">
         <Avatar name={clientInfo?.name || "Client"} photo={clientInfo?.photo} size="md" />
         <div className="flex-1 min-w-0">
@@ -623,7 +423,6 @@ const MessagesTab = ({ jobId, clientInfo, isRejected }) => {
         </div>
       </div>
 
-      {/* ✅ Rejected banner */}
       {isRejected && (
         <div className="flex items-center gap-2 px-5 py-2.5 bg-red-50 border-b border-red-100 shrink-0">
           <Ban size={14} className="text-red-400 shrink-0" />
@@ -633,7 +432,6 @@ const MessagesTab = ({ jobId, clientInfo, isRejected }) => {
         </div>
       )}
 
-      {/* Messages Area */}
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-1 bg-[#f0f4f8]">
         {loading ? (
           <div className="flex items-center justify-center h-full">
@@ -692,7 +490,6 @@ const MessagesTab = ({ jobId, clientInfo, isRejected }) => {
         )}
       </div>
 
-      {/* File Preview Bar */}
       {selectedFile && !isRejected && (
         <div className="flex items-center gap-3 px-4 py-2.5 bg-teal-50 border-t border-teal-100 shrink-0">
           {filePreview ? (
@@ -712,7 +509,6 @@ const MessagesTab = ({ jobId, clientInfo, isRejected }) => {
         </div>
       )}
 
-      {/* ✅ Input Bar — disabled when rejected */}
       {isRejected ? (
         <div className="flex items-center justify-center px-4 py-3 border-t border-gray-100 bg-gray-50 shrink-0">
           <p className="text-xs text-gray-400 font-medium">Messaging is disabled</p>
@@ -720,7 +516,7 @@ const MessagesTab = ({ jobId, clientInfo, isRejected }) => {
       ) : (
         <form onSubmit={handleSend} className="flex items-end gap-2 px-4 py-3 border-t border-gray-100 bg-white shrink-0">
           <button type="button" onClick={() => fileInputRef.current?.click()}
-            className="p-2 text-gray-400 hover:text-teal-600 transition shrink-0" title="Attach file">
+            className="p-2 text-gray-400 hover:text-teal-600 transition shrink-0">
             <Paperclip size={18} />
           </button>
           <input ref={fileInputRef} type="file"
@@ -733,7 +529,7 @@ const MessagesTab = ({ jobId, clientInfo, isRejected }) => {
               inp.onchange = (e) => handleFileSelect(e);
               inp.click();
             }}
-            className="p-2 text-gray-400 hover:text-teal-600 transition shrink-0" title="Send image">
+            className="p-2 text-gray-400 hover:text-teal-600 transition shrink-0">
             <Image size={18} />
           </button>
           <div className="flex-1 flex items-end bg-gray-50 border border-gray-200 rounded-2xl px-4 py-2 focus-within:border-teal-400 transition-colors">
@@ -772,7 +568,6 @@ const FreelancerJobApplication = () => {
 
   const token = getToken();
 
-  // ── Fetch Job ───────────────────────────────────────────────────────────────
   useEffect(() => {
     const fetchJob = async () => {
       try {
@@ -782,11 +577,11 @@ const FreelancerJobApplication = () => {
         if (!res.ok) throw new Error("Failed to fetch job");
         const data = await res.json();
         setJob(data.data);
-        setIsSaved(data.data?.isSaved     || false);
-        setBidAmount(data.data?.budget    || "");
-        setIsApplied(data.data?.isApplied || false);
+        setIsSaved(data.data?.isSaved       || false);
+        setBidAmount(data.data?.budget      || "");
+        setIsApplied(data.data?.isApplied   || false);
         setIsRejected(data.data?.isRejected || false);
-        setClientInfo(data.data?.client   || null);
+        setClientInfo(data.data?.client     || null);
       } catch (e) {
         console.error(e);
       } finally {
@@ -796,7 +591,6 @@ const FreelancerJobApplication = () => {
     fetchJob();
   }, [jobId]);
 
-  // ── Track view ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!jobId) return;
     fetch(`${BASE_URL}/api/jobs/${jobId}/view`, {
@@ -805,7 +599,6 @@ const FreelancerJobApplication = () => {
     }).catch(console.error);
   }, [jobId]);
 
-  // ── Save toggle ─────────────────────────────────────────────────────────────
   const handleSave = async () => {
     const prev = isSaved;
     setIsSaved(!prev);
@@ -822,7 +615,6 @@ const FreelancerJobApplication = () => {
     }
   };
 
-  // ── Apply toggle ────────────────────────────────────────────────────────────
   const handleApply = async (bidValue) => {
     try {
       const res = await fetch(`${BASE_URL}/api/jobs/${jobId}/apply`, {
@@ -838,7 +630,6 @@ const FreelancerJobApplication = () => {
       setJob((prev) => ({ ...prev, isApplied: newApplied }));
 
       if (!newApplied) {
-        // Unapply → delete messages + go to details tab
         await fetch(`${BASE_URL}/api/freelancer/messages/${jobId}`, {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token}` },
@@ -853,7 +644,6 @@ const FreelancerJobApplication = () => {
     }
   };
 
-  // ── Tabs: Messages tab shows when applied OR rejected (read-only) ───────────
   const tabs = [
     { key: "details",     label: "Job Details" },
     ...(isApplied || isRejected ? [{ key: "application", label: "Application" }] : []),
@@ -865,8 +655,6 @@ const FreelancerJobApplication = () => {
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-8 bg-white min-h-screen">
-
-      {/* Tab Nav */}
       <div className="flex gap-6 border-b border-gray-200 mb-8">
         {tabs.map((tab) => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
@@ -874,29 +662,22 @@ const FreelancerJobApplication = () => {
               activeTab === tab.key
                 ? "text-teal-600 border-b-2 border-teal-600"
                 : "text-gray-400 hover:text-gray-700"
-            }`}
-          >
+            }`}>
             {tab.label}
           </button>
         ))}
       </div>
 
-      {/* Tab Content */}
       <div>
         {activeTab === "details" && (
           <JobDetailsTab
-            job={job}
-            isApplied={isApplied}
-            isRejected={isRejected}
-            isSaved={isSaved}
-            onApply={handleApply}
-            onSave={handleSave}
-            bidAmount={bidAmount}
-            setBidAmount={setBidAmount}
+            job={job} isApplied={isApplied} isRejected={isRejected}
+            isSaved={isSaved} onApply={handleApply} onSave={handleSave}
+            bidAmount={bidAmount} setBidAmount={setBidAmount}
           />
         )}
         {activeTab === "application" && (isApplied || isRejected) && (
-          <ApplicationTab jobId={jobId} />
+          <ApplicationTab jobId={jobId} />  // ✅ alag file se aa raha hai
         )}
         {activeTab === "messages" && (isApplied || isRejected) && (
           <MessagesTab jobId={jobId} clientInfo={clientInfo} isRejected={isRejected} />

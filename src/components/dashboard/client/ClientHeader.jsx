@@ -94,14 +94,14 @@ const Header = () => {
       label: "Manage work",
       options: [
         { name: "Your contracts", path: "contracts" },
-        { name: "Job bidings", path: "job-bidings" },
+        { name: "Proposals & bids", path: "proposals-bids" },
       ],
-    },
+    }, 
     {
       label: "Reports",
       options: [
-        { name: "Transaction summary", path: "client/dashboard/transactions" },
-        { name: "Project history", path: "client/dashboard/project-history" },
+        { name: "Transaction summary", path: "transactions" },
+        { name: "Project history", path: "project-history" },
       ],
     },
   ];

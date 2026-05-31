@@ -30,8 +30,6 @@ const JobOverviewSection = () => {
 
         const data = await response.json();
 
-        console.log("API RESPONSE:", data);
-
         const jobsArray = Array.isArray(data) ? data : data.jobs;
 
         const formattedData = jobsArray.map((item) => {

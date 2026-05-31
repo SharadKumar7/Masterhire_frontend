@@ -1,12 +1,14 @@
 // ─── ApplicationsSection.jsx ──────────────────────────────────────────────────
 import React, { useState, useEffect, useCallback } from "react";
-import { Send, X, Check, Briefcase, Loader2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Send, X, Check, Briefcase, Loader2, MessageSquare, ChevronRight } from "lucide-react";
 import { apiFetch, Spinner, ErrorBanner, Avatar } from "./Shared";
 
 const ApplicationsSection = ({ jobId, onNegotiationOpen, onChatOpen }) => {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const navigate = useNavigate();
+  const [data, setData]               = useState(null);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
 
   const fetchApplications = useCallback(async () => {
@@ -22,24 +24,21 @@ const ApplicationsSection = ({ jobId, onNegotiationOpen, onChatOpen }) => {
     }
   }, [jobId]);
 
-  useEffect(() => {
-    fetchApplications();
-  }, [fetchApplications]);
+  useEffect(() => { fetchApplications(); }, [fetchApplications]);
 
-  // PATCH status + if accepted → mark job as assigned & remove from public
   const handleStatusUpdate = async (applicationId, status, bidAmount = null) => {
     try {
       setActionLoading(applicationId);
       const body = { status };
       if (bidAmount) body.bidAmount = bidAmount;
-      // This endpoint handles:
-      //   - setting application status
-      //   - if status==="accepted": sets job.status="assigned", job.assignedFreelancer, job.isPublic=false
-      //   - rejects all other pending applications automatically
       await apiFetch(`/api/client/${applicationId}/status`, {
         method: "PATCH",
         body: JSON.stringify(body),
       });
+      if (status === "accepted") {
+        navigate("/client/dashboard");
+        return;
+      }
       await fetchApplications();
     } catch (e) {
       alert(`Error: ${e.message}`);
@@ -48,14 +47,14 @@ const ApplicationsSection = ({ jobId, onNegotiationOpen, onChatOpen }) => {
     }
   };
 
-  const handleNegotiate = (application) => {
-    handleStatusUpdate(application._id, "negotiation", application.bidAmount);
-    onNegotiationOpen(application);
+  const handleNegotiate = async (application) => {
+    await handleStatusUpdate(application._id, "negotiation", application.bidAmount);
+    onNegotiationOpen(application); // opens negotiation tab with this freelancer
   };
 
   if (loading) return <Spinner text="Loading applications..." />;
-  if (error) return <ErrorBanner message={error} />;
-  if (!data) return null;
+  if (error)   return <ErrorBanner message={error} />;
+  if (!data)   return null;
 
   const statusColor = {
     pending:     "text-yellow-600 bg-yellow-50 border-yellow-200",
@@ -79,15 +78,12 @@ const ApplicationsSection = ({ jobId, onNegotiationOpen, onChatOpen }) => {
       {/* Stats Row */}
       <div className="grid grid-cols-4 gap-3 mb-6">
         {[
-          { label: "Total",    value: data.totalApplications,      color: "text-gray-900" },
-          { label: "Pending",  value: data.statusCounts?.pending,  color: "text-yellow-600" },
-          { label: "Accepted", value: data.statusCounts?.accepted, color: "text-green-600" },
-          { label: "Rejected", value: data.statusCounts?.rejected, color: "text-red-500" },
+          { label: "Total",       value: data.totalApplications,           color: "text-gray-900" },
+          { label: "Pending",     value: data.statusCounts?.pending,       color: "text-yellow-600" },
+          { label: "Accepted",    value: data.statusCounts?.accepted,      color: "text-green-600" },
+          { label: "Negotiation", value: data.statusCounts?.negotiation,   color: "text-blue-600" },
         ].map((stat) => (
-          <div
-            key={stat.label}
-            className="bg-gray-50 border border-gray-100 rounded-xl p-3 text-center"
-          >
+          <div key={stat.label} className="bg-gray-50 border border-gray-100 rounded-xl p-3 text-center">
             <p className={`text-xl font-bold ${stat.color}`}>{stat.value ?? 0}</p>
             <p className="text-xs text-gray-400 mt-0.5">{stat.label}</p>
           </div>
@@ -95,8 +91,7 @@ const ApplicationsSection = ({ jobId, onNegotiationOpen, onChatOpen }) => {
       </div>
 
       <p className="text-sm text-gray-500">
-        {data.totalApplications} application
-        {data.totalApplications !== 1 ? "s" : ""} received
+        {data.totalApplications} application{data.totalApplications !== 1 ? "s" : ""} received
       </p>
 
       {data.applications.length === 0 ? (
@@ -107,19 +102,19 @@ const ApplicationsSection = ({ jobId, onNegotiationOpen, onChatOpen }) => {
       ) : (
         <div className="flex flex-col gap-3">
           {data.applications.map((app) => {
-            const isProcessing = actionLoading === app._id;
-            const isHired = app.status === "accepted";
-            const isRejected = app.status === "rejected";
+            const isProcessing  = actionLoading === app._id;
+            const isHired       = app.status === "accepted";
+            const isRejected    = app.status === "rejected";
+            const isNegotiating = app.status === "negotiation";
 
             return (
               <div
                 key={app._id}
                 className={`flex items-center justify-between border rounded-xl p-3 bg-white transition-all ${
-                  isRejected
-                    ? "border-gray-200 opacity-60"
-                    : isHired
-                    ? "border-green-300 bg-green-50/30"
-                    : "border-teal-500 hover:shadow-sm"
+                  isRejected    ? "border-gray-200 opacity-60"          :
+                  isHired       ? "border-green-300 bg-green-50/30"     :
+                  isNegotiating ? "border-blue-300 bg-blue-50/20"       :
+                  "border-teal-500 hover:shadow-sm"
                 }`}
               >
                 {/* Left: Profile */}
@@ -128,11 +123,7 @@ const ApplicationsSection = ({ jobId, onNegotiationOpen, onChatOpen }) => {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h2 className="font-bold text-gray-900 text-sm">{app.user?.name}</h2>
-                      <span
-                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                          statusColor[app.status] || statusColor.pending
-                        }`}
-                      >
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${statusColor[app.status] || statusColor.pending}`}>
                         {app.status}
                       </span>
                       {isHired && (
@@ -144,10 +135,7 @@ const ApplicationsSection = ({ jobId, onNegotiationOpen, onChatOpen }) => {
                     <p className="text-xs text-gray-400 truncate">{app.user?.email}</p>
                     <div className="flex gap-1.5 items-center mt-1 flex-wrap">
                       {(app.user?.skills || []).slice(0, 3).map((skill) => (
-                        <span
-                          key={skill}
-                          className="px-2 py-0.5 bg-teal-50 text-teal-700 text-[10px] rounded-full border border-teal-100"
-                        >
+                        <span key={skill} className="px-2 py-0.5 bg-teal-50 text-teal-700 text-[10px] rounded-full border border-teal-100">
                           {skill}
                         </span>
                       ))}
@@ -181,11 +169,34 @@ const ApplicationsSection = ({ jobId, onNegotiationOpen, onChatOpen }) => {
                       </button>
                     </div>
                   ) : isRejected ? (
-                    <span className="text-xs text-red-500 font-semibold px-3 py-1.5 bg-red-50 rounded-lg border border-red-200">
-                      ✗ Rejected
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-red-500 font-semibold px-3 py-1.5 bg-red-50 rounded-lg border border-red-200">
+                        ✗ Rejected
+                      </span>
+                      {/* Message button even for rejected */}
+                      <button
+                        onClick={() => onChatOpen(app)}
+                        className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 text-gray-500 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+                      >
+                        <MessageSquare size={12} /> Chat
+                      </button>
+                    </div>
+                  ) : isNegotiating ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => onNegotiationOpen(app)}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors"
+                      >
+                        <ChevronRight size={12} /> Negotiate
+                      </button>
+                      <button
+                        onClick={() => onChatOpen(app)}
+                        className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+                      >
+                        <MessageSquare size={12} /> Message
+                      </button>
+                    </div>
                   ) : isJobAssigned ? (
-                    // Job already assigned to someone else — only reject remaining
                     <button
                       onClick={() => handleStatusUpdate(app._id, "rejected")}
                       className="flex items-center gap-1 px-3 py-1.5 border border-red-200 text-red-500 rounded-lg text-xs font-bold hover:bg-red-50 transition-colors"
@@ -202,7 +213,7 @@ const ApplicationsSection = ({ jobId, onNegotiationOpen, onChatOpen }) => {
                       </button>
                       <button
                         onClick={() => handleNegotiate(app)}
-                        className="px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+                        className="px-3 py-1.5 border border-blue-200 text-blue-600 rounded-lg text-xs font-medium hover:bg-blue-50 transition-colors"
                       >
                         Negotiate
                       </button>
@@ -211,6 +222,12 @@ const ApplicationsSection = ({ jobId, onNegotiationOpen, onChatOpen }) => {
                         className="flex items-center gap-1 px-3 py-1.5 bg-teal-600 text-white rounded-lg text-xs font-bold hover:bg-teal-700 transition-colors"
                       >
                         <Check size={13} strokeWidth={3} /> Hire
+                      </button>
+                      <button
+                        onClick={() => onChatOpen(app)}
+                        className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50 transition-colors"
+                      >
+                        <MessageSquare size={12} /> Message
                       </button>
                     </>
                   )}
@@ -223,5 +240,6 @@ const ApplicationsSection = ({ jobId, onNegotiationOpen, onChatOpen }) => {
     </div>
   );
 };
+
 
 export default ApplicationsSection;
