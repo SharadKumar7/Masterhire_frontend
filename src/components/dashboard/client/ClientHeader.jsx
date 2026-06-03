@@ -10,6 +10,10 @@ import {
   Settings,
   LogOut,
 } from "lucide-react";
+import NotificationBell from "../NotificatioBell";
+
+
+
 
 const Dropdown = ({ label, options, icon }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -55,23 +59,39 @@ const Dropdown = ({ label, options, icon }) => {
           className={`absolute  mt-2 w-48 rounded-xl shadow-xl bg-white ring-1 ring-black/5 z-50 overflow-hidden ${icon ? "right-0" : "left-0"}`}
         >
           <div className="py-1">
-            {options.map((opt, idx) => (
-              <Link
-                key={idx}
-                to={opt.path}
-                className="block px-4 py-2.5 text-sm text-gray-800  hover:text-teal-500 transition-colors"
-                onClick={() => setIsOpen(false)}
-              >
-                {icon
-                  ? opt.icon && (
-                      <span className="mr-2 inline-block align-middle">
-                        {opt.icon}
-                      </span>
-                    )
-                  : null}
-                {opt.name}
-              </Link>
-            ))}
+            {options.map((opt, idx) =>
+              opt.action ? (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    opt.action();
+                    setIsOpen(false);
+                  }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-gray-800 hover:text-teal-500 transition-colors"
+                >
+                  {icon && opt.icon && (
+                    <span className="mr-2 inline-block align-middle">
+                      {opt.icon}
+                    </span>
+                  )}
+                  {opt.name}
+                </button>
+              ) : (
+                <Link
+                  key={idx}
+                  to={opt.path}
+                  className="block px-4 py-2.5 text-sm text-gray-800 hover:text-teal-500 transition-colors"
+                  onClick={() => setIsOpen(false)}
+                >
+                  {icon && opt.icon && (
+                    <span className="mr-2 inline-block align-middle">
+                      {opt.icon}
+                    </span>
+                  )}
+                  {opt.name}
+                </Link>
+              ),
+            )}
           </div>
         </div>
       )}
@@ -96,7 +116,7 @@ const Header = () => {
         { name: "Your contracts", path: "contracts" },
         { name: "Proposals & bids", path: "proposals-bids" },
       ],
-    }, 
+    },
     {
       label: "Reports",
       options: [
@@ -109,7 +129,7 @@ const Header = () => {
   const profileOptions = [
     {
       name: "Dashboard",
-      path: "", 
+      path: "",
       icon: <LayoutDashboard className="h-5 w-5" />,
     },
     {
@@ -122,7 +142,15 @@ const Header = () => {
       path: "settings",
       icon: <Settings className="h-5 w-5" />,
     },
-    { name: "Log out", path: "/", icon: <LogOut className="h-5 w-5" /> },
+    {
+      name: "Log out",
+      action: () => {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        window.location.href = "/";
+      },
+      icon: <LogOut className="h-5 w-5" />,
+    },
   ];
 
   return (
@@ -141,12 +169,34 @@ const Header = () => {
           </nav>
 
           <div className="flex items-center space-x-3">
-            <button className="p-2 text-gray-500 hover:text-teal-600">
-              <Headset />
-            </button>
-            <button className="p-2 text-gray-500 hover:text-teal-600">
-              <MessageSquareDot />
-            </button>
+            <Link
+              to="/help-support"
+              className="relative group p-2 text-gray-500 hover:text-teal-600"
+            >
+              <Headset className="h-6 w-6" />
+
+              <span
+                className="
+      absolute
+      top-full
+      left-1/2
+      -translate-x-1/2
+      mt-1
+      text-xs
+      text-gray-700
+      whitespace-nowrap
+      opacity-0
+      group-hover:opacity-100
+      transition-opacity
+      duration-200
+    "
+              >
+                Client Support
+              </span>
+            </Link>
+            
+              <NotificationBell />
+            
 
             {/* Fix: Directly pass profileOptions instead of profileData[0] */}
             <Dropdown

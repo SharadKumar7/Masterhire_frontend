@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Calendar, ChevronDown, ChevronRight, ArrowUpDown,
   Download, Filter, X, Search, TrendingUp, TrendingDown,
@@ -7,66 +7,8 @@ import {
   Building2, IndianRupee,
 } from 'lucide-react';
 
-// ─── CLIENT-SIDE DATA ─────────────────────────────────────────────────────────
-const METRICS = [
-  { id: 'total-spent',      label: 'Total Spent',       value: 345800, subLabel: '22.4% vs Apr', subType: 'negative', icon: 'wallet',     color: 'teal'  },
-  { id: 'escrow-held',      label: 'Escrow Held',        value: 95000,  subLabel: 'In 3 contracts', subType: 'neutral', icon: 'lock',      color: 'blue'  },
-  { id: 'pending-release',  label: 'Pending Release',    value: 32000,  subLabel: 'Awaiting approval', subType: 'warning', icon: 'clock',  color: 'amber' },
-  { id: 'wallet-balance',   label: 'Wallet Balance',     value: 58200,  subLabel: 'Available to pay', subType: 'neutral', icon: 'creditCard', color: 'cyan' },
-  { id: 'total-released',   label: 'Total Released',     value: 218600, subLabel: '18.1% vs Apr', subType: 'positive', icon: 'arrowUp',   color: 'teal'  },
-  { id: 'platform-fees',    label: 'Platform Fees',      value: 8450,   subLabel: '5.2% vs Apr',  subType: 'negative', icon: 'percent',   color: 'rose'  },
-];
-
-const CHART_DATA_THIS_MONTH = [
-  { label: 'May 01', value: 12000 },
-  { label: 'May 04', value: 18000 },
-  { label: 'May 07', value: 9500  },
-  { label: 'May 10', value: 22000 },
-  { label: 'May 13', value: 15000 },
-  { label: 'May 16', value: 28000 },
-  { label: 'May 19', value: 35000 },
-  { label: 'May 22', value: 21000 },
-  { label: 'May 25', value: 42000 },
-  { label: 'May 28', value: 30000 },
-  { label: 'May 31', value: 19000 },
-];
-
-const CHART_DATA_LAST_MONTH = [
-  { label: 'Apr 01', value: 8000  },
-  { label: 'Apr 04', value: 14000 },
-  { label: 'Apr 07', value: 11000 },
-  { label: 'Apr 10', value: 19000 },
-  { label: 'Apr 13', value: 13500 },
-  { label: 'Apr 16', value: 24000 },
-  { label: 'Apr 19', value: 31000 },
-  { label: 'Apr 22', value: 17000 },
-  { label: 'Apr 25', value: 26000 },
-  { label: 'Apr 28', value: 22000 },
-  { label: 'Apr 30', value: 16000 },
-];
-
-const BREAKDOWN_DATA = [
-  { label: 'Milestone Payments', value: 198000, pct: 57.3, color: '#2dd4bf' },
-  { label: 'Project Payments',   value: 110600, pct: 32.0, color: '#60a5fa' },
-  { label: 'Escrow Deposits',    value: 28750,  pct: 8.3,  color: '#34d399' },
-  { label: 'Platform Fees',      value: 8450,   pct: 2.4,  color: '#fbbf24' },
-];
-
-const TRANSACTIONS = [
-  { id: 1, type: 'Milestone Release', typeIcon: 'arrowUp',   description: 'Milestone 3 Approved',   project: 'E-commerce Website',   amount: 20000, isCredit: false, status: 'Released',  date: 'May 28, 2024', time: '11:30 AM' },
-  { id: 2, type: 'Escrow Deposit',    typeIcon: 'arrowDown', description: 'Funds added to Escrow',   project: 'Fitness Tracker App',  amount: 15000, isCredit: true,  status: 'Held',      date: 'May 25, 2024', time: '04:20 PM' },
-  { id: 3, type: 'Wallet Top-up',     typeIcon: 'arrowDown', description: 'Added via UPI',           project: '—',                    amount: 50000, isCredit: true,  status: 'Completed', date: 'May 22, 2024', time: '09:15 AM' },
-  { id: 4, type: 'Milestone Release', typeIcon: 'arrowUp',   description: 'Milestone 2 Approved',   project: 'Portfolio Website',    amount: 8500,  isCredit: false, status: 'Released',  date: 'May 20, 2024', time: '02:45 PM' },
-  { id: 5, type: 'Platform Fee',      typeIcon: 'percent',   description: 'Service Fee Charged',    project: 'E-commerce Website',   amount: 850,   isCredit: false, status: 'Deducted',  date: 'May 20, 2024', time: '02:45 PM' },
-  { id: 6, type: 'Refund Received',   typeIcon: 'refresh',   description: 'Refund from Freelancer', project: 'Logo Design',          amount: 2000,  isCredit: true,  status: 'Refunded',  date: 'May 18, 2024', time: '01:10 PM' },
-];
-
-const PAYMENT_FLOW = [
-  { label: 'Add Funds',     sub: 'to Wallet',      icon: 'creditCard', color: 'teal'  },
-  { label: 'Deposit',       sub: 'into Escrow',    icon: 'lock',       color: 'blue'  },
-  { label: 'Milestone',     sub: 'Gets Approved',  icon: 'checkCircle',color: 'amber' },
-  { label: 'Freelancer',    sub: 'Gets Paid',      icon: 'arrowUp',    color: 'teal'  },
-];
+const BASE_URL = import.meta.env.VITE_API_URL;
+const getToken = () => localStorage.getItem("token");
 
 const DATE_RANGES = [
   'May 01 - May 31, 2024',
@@ -78,9 +20,16 @@ const DATE_RANGES = [
 const TX_TYPES    = ['All', 'Milestone Release', 'Escrow Deposit', 'Wallet Top-up', 'Platform Fee', 'Refund Received'];
 const TX_STATUSES = ['All', 'Released', 'Held', 'Completed', 'Deducted', 'Refunded'];
 
-// ─── SHARED HELPERS ───────────────────────────────────────────────────────────
+const PAYMENT_FLOW = [
+  { label: 'Add Funds',  sub: 'to Wallet',     icon: 'creditCard',  color: 'teal'  },
+  { label: 'Deposit',    sub: 'into Escrow',   icon: 'lock',        color: 'blue'  },
+  { label: 'Milestone',  sub: 'Gets Approved', icon: 'checkCircle', color: 'amber' },
+  { label: 'Freelancer', sub: 'Gets Paid',     icon: 'arrowUp',     color: 'teal'  },
+];
+
+// ─── Shared Helpers ───────────────────────────────────────────────────────────
 const formatINR = (v) =>
-  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
+  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v || 0);
 
 const ICON_MAP = {
   wallet: Wallet, creditCard: CreditCard, clock: Clock, lock: Lock,
@@ -88,7 +37,7 @@ const ICON_MAP = {
   refresh: RefreshCw, checkCircle: CheckCircle, bank: Building2,
 };
 
-// ─── METRIC CARD ──────────────────────────────────────────────────────────────
+// ─── Metric Card ──────────────────────────────────────────────────────────────
 const METRIC_ICON_COLORS = {
   teal: 'bg-teal-600 text-white', blue: 'bg-blue-500 text-white',
   amber: 'bg-amber-500 text-white', cyan: 'bg-cyan-500 text-white', rose: 'bg-rose-500 text-white',
@@ -97,7 +46,7 @@ const METRIC_ICON_COLORS = {
 function MetricCard({ label, value, subLabel, subType, icon, color }) {
   const Icon = ICON_MAP[icon] || Wallet;
   const subColor = { positive: 'text-teal-600', negative: 'text-rose-500', warning: 'text-amber-500', neutral: 'text-slate-500' }[subType];
-  const SubIcon = subType === 'positive' ? TrendingUp : subType === 'negative' ? TrendingDown : Minus;
+  const SubIcon  = subType === 'positive' ? TrendingUp : subType === 'negative' ? TrendingDown : Minus;
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 flex flex-col gap-3 hover:shadow-md hover:border-teal-200 transition-all duration-200 group">
       <div className="flex items-center justify-between">
@@ -117,17 +66,17 @@ function MetricCard({ label, value, subLabel, subType, icon, color }) {
   );
 }
 
-// ─── SVG AREA CHART ───────────────────────────────────────────────────────────
-function EarningsChart({ data, label = 'Spending' }) {
+// ─── SVG Chart ────────────────────────────────────────────────────────────────
+function EarningsChart({ data }) {
   const [tooltip, setTooltip] = useState(null);
   const W = 600, H = 200, PAD = { top: 20, right: 20, bottom: 40, left: 50 };
   const innerW = W - PAD.left - PAD.right, innerH = H - PAD.top - PAD.bottom;
-  const maxVal = Math.max(...data.map(d => d.value));
-  const xScale = (i) => PAD.left + (i / (data.length - 1)) * innerW;
+  const maxVal = Math.max(...data.map(d => d.value), 1);
+  const xScale = (i) => PAD.left + (i / Math.max(data.length - 1, 1)) * innerW;
   const yScale = (v) => PAD.top + innerH - (v / maxVal) * innerH;
   const points = data.map((d, i) => ({ x: xScale(i), y: yScale(d.value), ...d }));
-  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-  const areaD = `${pathD} L ${points[points.length - 1].x} ${PAD.top + innerH} L ${points[0].x} ${PAD.top + innerH} Z`;
+  const pathD  = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+  const areaD  = `${pathD} L ${points[points.length - 1].x} ${PAD.top + innerH} L ${points[0].x} ${PAD.top + innerH} Z`;
   const yTicks = [0, 10000, 20000, 30000, 40000];
 
   return (
@@ -172,7 +121,7 @@ function EarningsChart({ data, label = 'Spending' }) {
   );
 }
 
-// ─── DONUT CHART ──────────────────────────────────────────────────────────────
+// ─── Donut Chart ──────────────────────────────────────────────────────────────
 function DonutChart({ data, total }) {
   const [hovered, setHovered] = useState(null);
   const R = 70, CX = 90, CY = 90, STROKE = 22, circ = 2 * Math.PI * R;
@@ -221,7 +170,7 @@ function DonutChart({ data, total }) {
   );
 }
 
-// ─── STATUS BADGE ─────────────────────────────────────────────────────────────
+// ─── Status Badge ─────────────────────────────────────────────────────────────
 const STATUS_STYLES = {
   Released:  'bg-teal-100 text-teal-700 border border-teal-200',
   Held:      'bg-blue-100 text-blue-700 border border-blue-200',
@@ -238,7 +187,6 @@ function StatusBadge({ status }) {
   );
 }
 
-// ─── TX TYPE ICON ─────────────────────────────────────────────────────────────
 const TYPE_ICON_STYLES = {
   arrowUp:   'bg-rose-50 text-rose-500',
   arrowDown: 'bg-teal-50 text-teal-600',
@@ -255,7 +203,6 @@ function TxTypeIcon({ typeIcon }) {
   );
 }
 
-// ─── TRANSACTION ROW ──────────────────────────────────────────────────────────
 function TransactionRow({ tx }) {
   return (
     <div className="flex items-center gap-3 py-3 border-b border-slate-100 last:border-0 hover:bg-teal-50/40 transition-colors rounded-lg px-2 -mx-2 cursor-default">
@@ -279,7 +226,6 @@ function TransactionRow({ tx }) {
   );
 }
 
-// ─── FLOW STEP ────────────────────────────────────────────────────────────────
 const FLOW_COLORS = { teal: 'bg-teal-600 text-white', blue: 'bg-blue-500 text-white', amber: 'bg-amber-500 text-white' };
 
 function FlowStep({ step, isLast }) {
@@ -300,7 +246,6 @@ function FlowStep({ step, isLast }) {
   );
 }
 
-// ─── DATE RANGE PICKER ────────────────────────────────────────────────────────
 function DateRangePicker({ value, onChange }) {
   const [open, setOpen] = useState(false);
   return (
@@ -325,16 +270,34 @@ function DateRangePicker({ value, onChange }) {
   );
 }
 
-// ─── ADD FUNDS MODAL ──────────────────────────────────────────────────────────
-function AddFundsModal({ onClose }) {
-  const [amount, setAmount] = useState('');
-  const [method, setMethod] = useState('upi');
-  const [submitted, setSubmitted] = useState(false);
+// ─── Add Funds Modal ──────────────────────────────────────────────────────────
+function AddFundsModal({ onClose, onSuccess }) {
+  const [amount, setAmount]         = useState('');
+  const [method, setMethod]         = useState('upi');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted]   = useState(false);
+  const [error, setError]           = useState('');
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!amount || Number(amount) <= 0) return;
-    setSubmitted(true);
-    setTimeout(() => onClose(), 2000);
+    setSubmitting(true);
+    setError('');
+    try {
+      const res = await fetch(`${BASE_URL}/api/client/add-funds`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        body:    JSON.stringify({ amount: Number(amount), method }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      setSubmitted(true);
+      onSuccess(data.newBalance);
+      setTimeout(() => onClose(), 2000);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -352,8 +315,7 @@ function AddFundsModal({ onClose }) {
             <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 text-xs text-teal-700 font-medium">
               Funds go to your wallet and can be used to pay freelancers via escrow.
             </div>
-
-            {/* Payment method */}
+            {error && <p className="text-xs text-rose-500 font-medium">{error}</p>}
             <div className="space-y-1.5">
               <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Payment Method</label>
               <div className="grid grid-cols-3 gap-2">
@@ -365,14 +327,12 @@ function AddFundsModal({ onClose }) {
                 ))}
               </div>
             </div>
-
             <div className="space-y-1.5">
               <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Amount (₹)</label>
               <input type="number" placeholder="Enter amount" value={amount}
                 onChange={e => setAmount(e.target.value)}
                 className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-teal-400" />
             </div>
-
             <div className="flex gap-2">
               {[10000, 25000, 50000].map(q => (
                 <button key={q} onClick={() => setAmount(String(q))}
@@ -381,11 +341,10 @@ function AddFundsModal({ onClose }) {
                 </button>
               ))}
             </div>
-
             <button onClick={handleSubmit}
-              disabled={!amount || Number(amount) <= 0}
+              disabled={!amount || Number(amount) <= 0 || submitting}
               className="w-full py-2.5 bg-teal-600 text-white text-sm font-bold rounded-xl hover:bg-teal-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-              Add Funds
+              {submitting ? 'Processing...' : 'Add Funds'}
             </button>
           </>
         ) : (
@@ -402,7 +361,7 @@ function AddFundsModal({ onClose }) {
   );
 }
 
-// ─── TRANSACTIONS PANEL ───────────────────────────────────────────────────────
+// ─── Transactions Panel ───────────────────────────────────────────────────────
 function TransactionsPanel({ transactions }) {
   const [typeFilter, setTypeFilter]     = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -445,11 +404,6 @@ function TransactionsPanel({ transactions }) {
           <button onClick={() => setFiltersOpen(o => !o)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${filtersOpen ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-slate-600 border-slate-200 hover:border-teal-400'}`}>
             <Filter className="w-3.5 h-3.5" /> Filters
-            {(typeFilter !== 'All' || statusFilter !== 'All') && (
-              <span className="w-4 h-4 bg-white text-teal-700 rounded-full text-[9px] font-black flex items-center justify-center">
-                {(typeFilter !== 'All' ? 1 : 0) + (statusFilter !== 'All' ? 1 : 0)}
-              </span>
-            )}
           </button>
           <button onClick={() => setSortDir(d => d === 'desc' ? 'asc' : 'desc')}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:border-teal-400 transition-all bg-white">
@@ -528,14 +482,61 @@ function TransactionsPanel({ transactions }) {
   );
 }
 
-// ─── MAIN ─────────────────────────────────────────────────────────────────────
+// ─── Main ─────────────────────────────────────────────────────────────────────
 export default function ClientTransactionSummary() {
-  const [dateRange, setDateRange]   = useState(DATE_RANGES[0]);
-  const [chartTab, setChartTab]     = useState('this');
+  const [dateRange, setDateRange]       = useState(DATE_RANGES[0]);
+  const [chartTab, setChartTab]         = useState('this');
   const [showAddFunds, setShowAddFunds] = useState(false);
 
-  const chartData = chartTab === 'this' ? CHART_DATA_THIS_MONTH : CHART_DATA_LAST_MONTH;
-  const totalSpent = METRICS.find(m => m.id === 'total-spent')?.value || 0;
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState(null);
+  const [metrics, setMetrics]           = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [chartThisMonth, setChartThisMonth] = useState([]);
+  const [chartLastMonth, setChartLastMonth] = useState([]);
+  const [breakdown, setBreakdown]       = useState([]);
+  const [totalBreakdown, setTotalBreakdown] = useState(0);
+  const [walletBalance, setWalletBalance]   = useState(0);
+
+  const fetchData = async (range) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await fetch(
+        `${BASE_URL}/api/client/transactions?range=${encodeURIComponent(range)}`,
+        { headers: { Authorization: `Bearer ${getToken()}` } }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      setMetrics(data.metrics               || []);
+      setTransactions(data.transactions     || []);
+      setChartThisMonth(data.chartDataThisMonth || []);
+      setChartLastMonth(data.chartDataLastMonth || []);
+      setBreakdown(data.breakdown           || []);
+      setTotalBreakdown(data.totalForBreakdown || 0);
+      setWalletBalance(data.walletBalance   || 0);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchData(dateRange); }, [dateRange]);
+
+  const chartData = chartTab === 'this' ? chartThisMonth : chartLastMonth;
+
+  if (loading) return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <p className="text-teal-600 font-bold animate-pulse">Loading transactions...</p>
+    </div>
+  );
+
+  if (error) return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <p className="text-rose-500 font-medium">{error}</p>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 p-4 md:p-8 font-sans">
@@ -563,7 +564,7 @@ export default function ClientTransactionSummary() {
 
         {/* Metrics */}
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-          {METRICS.map(m => <MetricCard key={m.id} {...m} />)}
+          {metrics.map(m => <MetricCard key={m.id} {...m} />)}
         </div>
 
         {/* Charts */}
@@ -580,22 +581,25 @@ export default function ClientTransactionSummary() {
                 ))}
               </div>
             </div>
-            <EarningsChart data={chartData} />
+            {chartData.length > 0
+              ? <EarningsChart data={chartData} />
+              : <div className="h-40 flex items-center justify-center text-slate-400 text-sm">No data for this period</div>
+            }
           </div>
 
           <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
             <h2 className="text-base font-black text-slate-900 mb-5">Spending Breakdown</h2>
-            <DonutChart data={BREAKDOWN_DATA} total={totalSpent} />
-            <button className="mt-4 w-full flex items-center justify-between text-xs font-bold text-teal-600 hover:text-teal-800 transition-colors border-t border-slate-100 pt-3">
-              View full report <ChevronRight className="w-4 h-4" />
-            </button>
+            {breakdown.length > 0
+              ? <DonutChart data={breakdown} total={totalBreakdown} />
+              : <div className="h-40 flex items-center justify-center text-slate-400 text-sm">No data</div>
+            }
           </div>
         </div>
 
         {/* Transactions */}
-        <TransactionsPanel transactions={TRANSACTIONS} />
+        <TransactionsPanel transactions={transactions} />
 
-        {/* How Payments Flow */}
+        {/* Payment Flow */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
@@ -607,15 +611,20 @@ export default function ClientTransactionSummary() {
                 <FlowStep key={i} step={step} isLast={i === PAYMENT_FLOW.length - 1} />
               ))}
             </div>
-            <button className="flex items-center gap-1.5 px-4 py-2 bg-teal-50 border border-teal-200 text-teal-700 text-xs font-bold rounded-xl hover:bg-teal-600 hover:text-white hover:border-teal-600 transition-all">
-              Learn More
-            </button>
           </div>
         </div>
 
       </div>
 
-      {showAddFunds && <AddFundsModal onClose={() => setShowAddFunds(false)} />}
+      {showAddFunds && (
+        <AddFundsModal
+          onClose={() => setShowAddFunds(false)}
+          onSuccess={(newBal) => {
+            setWalletBalance(newBal);
+            fetchData(dateRange);
+          }}
+        />
+      )}
     </div>
   );
 }

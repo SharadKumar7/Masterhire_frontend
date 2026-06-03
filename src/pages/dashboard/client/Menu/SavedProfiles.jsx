@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Heart, Star, Briefcase, TrendingUp, UserX } from 'lucide-react';
+import ProfileCard from '../../../../components/dashboard/client/ProfileCard';
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
@@ -36,36 +37,7 @@ const SavedProfiles = () => {
   }, []);
 
   // ── Unsave profile ─────────────────────────────────────────
-  const handleUnsave = async (e, profileId) => {
-    e.stopPropagation();
-    setRemovingId(profileId);
-
-    try {
-      const res = await fetch(`${apiUrl}/api/saved-profiles/${profileId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to unsave');
-
-      // Animate out then remove
-      setTimeout(() => {
-        setProfiles(prev => prev.filter(p => p._id !== profileId));
-        setRemovingId(null);
-      }, 350);
-    } catch (err) {
-      console.error(err);
-      setRemovingId(null);
-    }
-  };
-
-  const handleViewProfile = (id) => {
-    window.location.href = `/profile/${id}`;
-  };
+  
 
   // ── Loading State ──────────────────────────────────────────
   if (loading) {
@@ -131,119 +103,33 @@ const SavedProfiles = () => {
       ) : (
         /* ── Grid ── */
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {profiles.map((profile, index) => {
               const isRemoving = removingId === profile._id;
 
               return (
-                <div
+                < ProfileCard
                   key={profile._id}
-                  onClick={() => handleViewProfile(profile._id)}
-                  style={{
-                    animationDelay: `${index * 60}ms`,
-                    opacity: isRemoving ? 0 : 1,
-                    transform: isRemoving ? 'scale(0.92) translateY(-8px)' : 'scale(1) translateY(0)',
-                    transition: isRemoving
-                      ? 'opacity 0.35s ease, transform 0.35s ease'
-                      : 'box-shadow 0.2s ease, transform 0.2s ease',
-                    animation: !isRemoving ? `fadeSlideIn 0.4s ease both ${index * 60}ms` : undefined,
+                  profile={{
+                    _id: profile._id,
+                    name: `${profile.firstName} ${profile.lastName}`.trim() || "Unknown Name",
+                    image: profile.photo || "https://via.placeholder.com/100",
+                    expertise: profile.title || "Unknown Title",
+                    description: profile.bio || "No bio available",
+                    rating: profile.rating || 0,
+                    jobSuccess: profile.jobSuccess || 0,
+                    totalJobs: profile.totalJobs || 0,
+                    available: profile.available || false,
+                    consultation: profile.consultation || false,
+                    isSaved: profile.isSaved || false,
                   }}
-                  className="relative bg-white rounded-2xl p-5 cursor-pointer group
-                    border border-slate-100 hover:border-teal-200
-                    shadow-sm hover:shadow-lg hover:-translate-y-0.5"
-                >
-                  {/* ── Heart / Unsave button ── */}
-                  <button
-                    onClick={(e) => handleUnsave(e, profile._id)}
-                    disabled={isRemoving}
-                    title="Remove from saved"
-                    className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full
-                      flex items-center justify-center
-                      bg-teal-50 hover:bg-red-50
-                      border border-teal-100 hover:border-red-200
-                      transition-all duration-200 group/heart"
-                  >
-                    <Heart
-                      size={16}
-                      className="fill-teal-500 stroke-teal-500
-                        group-hover/heart:fill-white group-hover/heart:stroke-red-400
-                        transition-all duration-200"
-                    />
-                  </button>
-
-                  {/* ── Avatar + Name + Stars ── */}
-                  <div className="flex items-start gap-3 mb-4 pr-8">
-                    <div className="relative flex-shrink-0">
-                      <img
-                        src={profile.profileImage || `https://api.dicebear.com/7.x/initials/svg?seed=${profile.name}`}
-                        alt={profile.name}
-                        className="w-14 h-14 rounded-xl object-cover border-2 border-teal-100"
-                      />
-                      {/* Online dot */}
-                      <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-400 rounded-full border-2 border-white" />
-                    </div>
-
-                    <div className="min-w-0">
-                      <h2 className="font-semibold text-slate-800 text-sm leading-tight truncate">
-                        {profile.name}
-                      </h2>
-                      {/* Stars */}
-                      <div className="flex gap-0.5 mt-1.5">
-                        {[...Array(5)].map((_, i) => (
-                          <Star
-                            key={i}
-                            size={11}
-                            className={i < (profile.rating || 5)
-                              ? 'fill-amber-400 stroke-amber-400'
-                              : 'fill-slate-200 stroke-slate-200'}
-                          />
-                        ))}
-                        <span className="text-[10px] text-slate-400 ml-1">
-                          {profile.rating || 5}.0
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* ── Role ── */}
-                  <p className="text-xs text-slate-500 leading-relaxed line-clamp-2 min-h-[2.5rem] mb-4">
-                    {profile.role || 'Freelancer'}
-                  </p>
-
-                  {/* ── Stats strip ── */}
-                  <div className="flex items-center justify-between bg-slate-50 rounded-xl px-3 py-2.5 mb-4 border border-slate-100">
-                    <div className="flex items-center gap-1.5">
-                      <TrendingUp size={12} className="text-teal-500" />
-                      <div>
-                        <p className="text-xs font-bold text-slate-700">{profile.jobSuccess || '95%'}</p>
-                        <p className="text-[9px] text-slate-400 uppercase tracking-wide">Success</p>
-                      </div>
-                    </div>
-                    <div className="w-px h-6 bg-slate-200" />
-                    <div className="flex items-center gap-1.5">
-                      <Briefcase size={12} className="text-teal-500" />
-                      <div>
-                        <p className="text-xs font-bold text-slate-700">{profile.totalJobs || 0}</p>
-                        <p className="text-[9px] text-slate-400 uppercase tracking-wide">Jobs</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* ── View Profile CTA ── */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleViewProfile(profile._id);
-                    }}
-                    className="w-full py-2 rounded-xl text-xs font-semibold tracking-wide
-                      border-2 border-teal-500 text-teal-600
-                      hover:bg-teal-500 hover:text-white
-                      active:scale-95
-                      transition-all duration-200"
-                  >
-                    View Profile
-                  </button>
-                </div>
+                  type="savedProfile"
+                  onUnsave={(e) => handleUnsave(e, profile._id)}
+                  onViewProfile={() => handleViewProfile(profile._id)}
+                  className={`transition-all duration-300 ${
+                    isRemoving ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'
+                  }`}
+                />
               );
             })}
           </div>

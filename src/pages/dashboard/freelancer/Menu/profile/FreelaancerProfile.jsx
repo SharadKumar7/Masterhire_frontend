@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Pencil, Check, CheckCircle2 } from "lucide-react";
+import { Pencil, CheckCircle2 } from "lucide-react";
 import {
   TitleBioModal, LanguagesModal, SkillsModal,
   EducationModal, WorkExperienceModal, CertificationsModal,
@@ -73,13 +73,9 @@ const SkillTag = ({ skill }) => (
 const FreelancerProfile = () => {
   const [profile, setProfile]       = useState(null);
   const [loading, setLoading]       = useState(true);
-  const [dirty, setDirty]           = useState(false);
-  const [saving, setSaving]         = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Modal open state — which modal is open
   const [openModal, setOpenModal] = useState(null);
-  // MODAL KEYS: "titleBio" | "languages" | "skills" | "education" | "experience" | "certifications" | "other"
 
   const fileInputRef = useRef(null);
 
@@ -129,34 +125,19 @@ const FreelancerProfile = () => {
   }, []);
 
   // ── Update helper ─────────────────────────────────────────────────────────
-  const update = (patch) => {
-    setProfile(prev => ({ ...prev, ...patch }));
-    setDirty(true);
-  };
+  const update = (patch) => setProfile(prev => ({ ...prev, ...patch }));
 
-  // ── Modal save handlers ───────────────────────────────────────────────────
+  // ── Modal save — direct API call per section ──────────────────────────────
   const handleModalSave = async (patch) => {
     update(patch);
-    // Optimistic — actual API save on "Save Changes" bar
-  };
-
-  // ── Save to backend ───────────────────────────────────────────────────────
-  const handleSave = async () => {
-    setSaving(true);
     try {
-      const res = await fetch(`${API_BASE}/profile/${profile.id}`, {
+      await fetch(`${API_BASE}/profile/${profile?.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(profile),
+        body: JSON.stringify({ ...profile, ...patch }),
       });
-      if (!res.ok) throw new Error("Save failed");
-      setDirty(false);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
       console.error("Save failed:", err);
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -176,7 +157,7 @@ const FreelancerProfile = () => {
   );
 
   return (
-    <div className="bg-slate-50 min-h-screen pb-32 font-sans">
+    <div className="bg-slate-50 min-h-screen font-sans">
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 
         {/* ── TOP CARD ────────────────────────────────────────────────── */}
@@ -186,7 +167,7 @@ const FreelancerProfile = () => {
             <div className="relative flex-shrink-0 group">
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="w-28 h-28 rounded-2xl overflow-hidden bg-slate-100 cursor-pointer border-2 border-slate-100 hover:border-teal-400 transition-all"
+                className="w-28 h-28 rounded-full overflow-hidden bg-slate-100 cursor-pointer border-2 border-slate-100 hover:border-teal-400 transition-all"
               >
                 {profile.avatar ? (
                   <img src={profile.avatar} alt="avatar" className="w-full h-full object-cover" />
@@ -195,7 +176,7 @@ const FreelancerProfile = () => {
                     {profile.name?.slice(0, 2).toUpperCase()}
                   </div>
                 )}
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 rounded-2xl transition-all flex items-center justify-center">
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 rounded-full transition-all flex items-center justify-center">
                   <Pencil size={18} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </div>
@@ -417,41 +398,7 @@ const FreelancerProfile = () => {
         <OtherExperiencesModal profile={profile} onClose={() => setOpenModal(null)} onSave={handleModalSave} />
       )}
 
-      {/* ── FLOATING SAVE BAR ─────────────────────────────────────────── */}
-      {dirty && (
-        <div className="fixed bottom-0 left-0 right-0 z-40">
-          <div className="max-w-4xl mx-auto px-4 pb-4">
-            <div className="bg-slate-900 text-white rounded-2xl shadow-2xl px-6 py-4 flex items-center justify-between gap-4">
-              <p className="text-sm text-slate-300">You have unsaved changes</p>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => { setDirty(false); window.location.reload(); }}
-                  className="px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors"
-                >
-                  Discard
-                </button>
-                <button onClick={handleSave} disabled={saving}
-                  className="px-6 py-2 bg-teal-500 hover:bg-teal-400 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-colors flex items-center gap-2">
-                  {saving ? (
-                    <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving...</>
-                  ) : (
-                    <><Check size={15} /> Save Changes</>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* ── SUCCESS TOAST ─────────────────────────────────────────────── */}
-      {saveSuccess && (
-        <div className="fixed bottom-6 right-6 z-50">
-          <div className="bg-teal-600 text-white px-5 py-3 rounded-xl shadow-lg flex items-center gap-2 text-sm font-semibold">
-            <Check size={15} /> Changes saved successfully
-          </div>
-        </div>
-      )}
     </div>
   );
 };

@@ -112,11 +112,32 @@ export const LanguagesModal = ({ profile, onClose, onSave }) => {
   );
   const [saving, setSaving] = useState(false);
 
-  const addRow = () => setOthers(prev => [...prev, { lang: LANGUAGE_OPTIONS[0], level: "Select Level" }]);
+  // All selected languages (to prevent duplicates)
+  const selectedLangs = others.map(r => r.lang);
+
+  // Available options for a given row (exclude already selected, except current row's own value)
+  const availableOptions = (currentLang) =>
+    LANGUAGE_OPTIONS
+      .filter(l => l === currentLang || !selectedLangs.includes(l))
+      .map(l => ({ value: l, label: l }));
+
+  // Add row — pick first unselected language
+  const addRow = () => {
+    const firstFree = LANGUAGE_OPTIONS.find(l => !selectedLangs.includes(l));
+    if (!firstFree) return; // all languages already added
+    setOthers(prev => [...prev, { lang: firstFree, level: "Select Level" }]);
+  };
+
   const removeRow = (i) => setOthers(prev => prev.filter((_, j) => j !== i));
   const updateRow = (i, field, val) => setOthers(prev => prev.map((r, j) => j === i ? { ...r, [field]: val } : r));
 
+  // Validation: English proficiency must be set, and every added language must have proficiency
+  const isValid =
+    englishLevel !== "Select Level" &&
+    others.every(r => r.level !== "Select Level");
+
   const handleSave = async () => {
+    if (!isValid) return;
     setSaving(true);
     const languages = [{ lang: "English", level: englishLevel }, ...others];
     await onSave({ languages });
@@ -129,37 +150,52 @@ export const LanguagesModal = ({ profile, onClose, onSave }) => {
       <div className="space-y-3">
 
         {/* English — fixed, only proficiency editable */}
-        <div className="flex items-center gap-3 p-3 bg-teal-50 border border-teal-100 rounded-xl">
-          <div className="flex-1">
-            <p className="text-xs font-bold text-teal-700">English</p>
-            <p className="text-[10px] text-teal-500">Required · Cannot be removed</p>
+        <div className="p-3 bg-teal-50 border border-teal-100 rounded-xl space-y-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-teal-700">English</p>
+              <p className="text-[10px] text-teal-500">Required · Cannot be removed</p>
+            </div>
           </div>
-          <div className="w-40">
-            <Select value={englishLevel} onChange={setEnglishLevel} options={PROFICIENCY_OPTIONS} />
-          </div>
+          <Select value={englishLevel} onChange={setEnglishLevel} options={PROFICIENCY_OPTIONS} />
+          {englishLevel === "Select Level" && (
+            <p className="text-[10px] text-rose-400 font-semibold">Please select proficiency level</p>
+          )}
         </div>
 
         {/* Other languages */}
         {others.map((row, i) => (
-          <div key={i} className="flex items-center gap-2 p-3 border border-slate-100 rounded-xl bg-slate-50">
-            <div className="flex-1">
-              <Select value={row.lang} onChange={val => updateRow(i, "lang", val)}
-                options={LANGUAGE_OPTIONS.map(l => ({ value: l, label: l }))} />
+          <div key={i} className="p-3 border border-slate-100 rounded-xl bg-slate-50 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Language {i + 2}</p>
+              <button onClick={() => removeRow(i)}
+                className="w-6 h-6 rounded-lg bg-rose-50 border border-rose-100 flex items-center justify-center hover:bg-rose-100 transition-colors">
+                <Trash2 size={12} className="text-rose-500" />
+              </button>
             </div>
-            <div className="w-40">
-              <Select value={row.level} onChange={val => updateRow(i, "level", val)} options={PROFICIENCY_OPTIONS} />
-            </div>
-            <button onClick={() => removeRow(i)}
-              className="w-7 h-7 rounded-lg bg-rose-50 border border-rose-100 flex items-center justify-center hover:bg-rose-100 transition-colors shrink-0">
-              <Trash2 size={13} className="text-rose-500" />
-            </button>
+            <Select value={row.lang} onChange={val => updateRow(i, "lang", val)}
+              options={availableOptions(row.lang)} />
+            <Select value={row.level} onChange={val => updateRow(i, "level", val)} options={PROFICIENCY_OPTIONS} />
+            {row.level === "Select Level" && (
+              <p className="text-[10px] text-rose-400 font-semibold">Please select proficiency level</p>
+            )}
           </div>
         ))}
 
-        <button onClick={addRow}
-          className="flex items-center gap-2 text-xs font-bold text-teal-600 hover:text-teal-800 transition-colors py-1">
+        {/* Add button — disabled if all languages used */}
+        <button
+          onClick={addRow}
+          disabled={selectedLangs.length >= LANGUAGE_OPTIONS.length}
+          className="flex items-center gap-2 text-xs font-bold text-teal-600 hover:text-teal-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors py-1"
+        >
           <Plus size={13} /> Add another language
         </button>
+
+        {!isValid && (
+          <p className="text-[11px] text-rose-400 font-semibold">
+            Please select proficiency level for all languages before saving.
+          </p>
+        )}
       </div>
     </ModalWrapper>
   );

@@ -2,43 +2,44 @@ import React, { useState } from "react";
 import { Heart, Star } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+const apiUrl = import.meta.env.VITE_API_URL;  
 
 const ProfileCard = ({ profile, type = "topFreelancer" }) => {
   const navigate = useNavigate();
 
   const [saved, setSaved] = useState(profile?.isSaved || false);
+  const [loading, setLoading] = useState(false);
 
   // =========================
   // Save / Unsave Profile
   // =========================
   const handleSaveProfile = async (e) => {
     e.stopPropagation();
-
+    if (loading) return;
+    setLoading(true);
+    const method = saved ? "DELETE" : "POST";
     try {
-      // UI instant update
-      setSaved((prev) => !prev);
-
-      await axios.post(
-        "/api/profile/save-profile",
-        {
-          freelancerId: profile._id,
+      const res = await fetch(`${apiUrl}/api/saved-profiles/${profile._id}`, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
-        {
-          withCredentials: true,
-        },
-      );
-    } catch (error) {
-      console.log(error);
+      });
+      if (res.ok) setSaved((prev) => !prev);
+    } catch (err) {
+      console.error("Save toggle failed", err);
+    } finally {
+      setLoading(false);
     }
   };
-
   // =========================
   // Button Navigation
   // =========================
   const handleAction = (e) => {
     e.stopPropagation();
 
-    navigate(`/freelancer/${profile._id}`);
+    navigate(`/client/dashboard/freelancer-profile/${profile._id}`);
   };
 
   // =========================
@@ -51,7 +52,7 @@ const ProfileCard = ({ profile, type = "topFreelancer" }) => {
       className="
         relative
         w-[340px]
-        min-h-[430px]
+        min-h-[380px]
         bg-white
         rounded-2xl
         border
@@ -69,30 +70,26 @@ const ProfileCard = ({ profile, type = "topFreelancer" }) => {
       {/* =========================
           Heart Save Button
       ========================= */}
-      <button
-        onClick={handleSaveProfile}
-        className="
-          absolute
-          top-4
-          right-4
-          w-10
-          h-10
-          rounded-full
-          border-2
-          border-teal-500
-          flex
-          items-center
-          justify-center
-          transition-all
-          duration-200
-          bg-white
-        "
-      >
-        <Heart
-          size={18}
-          className={saved ? "text-teal-500 fill-teal-500" : "text-teal-500"}
-        />
-      </button>
+     <button
+  onClick={handleSaveProfile}
+  className="
+    absolute
+    top-4
+    right-4
+    bg-transparent
+    border-none
+    p-0
+  "
+>
+  <Heart
+    size={24}
+    className={
+      saved
+        ? "text-teal-500 fill-teal-500"
+        : "text-teal-500 fill-transparent"
+    }
+  />
+</button>
 
       {/* =========================
           Top Profile
@@ -123,7 +120,7 @@ const ProfileCard = ({ profile, type = "topFreelancer" }) => {
               {[...Array(5)].map((_, index) => (
                 <Star
                   key={index}
-                  size={14} 
+                  size={14}
                   className={
                     index < rating
                       ? "fill-yellow-400 text-yellow-400"
@@ -153,7 +150,7 @@ const ProfileCard = ({ profile, type = "topFreelancer" }) => {
         {/* =========================
             Expertise
         ========================= */}
-        <div className="mb-4">
+        <div className="mb-1">
           <p className="text-sm font-semibold text-gray-700 mb-1">Expertise</p>
 
           <p className="text-sm text-gray-600 line-clamp-2 min-h-[40px]">
@@ -165,8 +162,8 @@ const ProfileCard = ({ profile, type = "topFreelancer" }) => {
             Description
             ONLY for Top Freelancer
         ========================= */}
-        {type === "topFreelancer" && (
-          <div className="mb-5">
+
+          <div className="mb-1">
             <p className="text-sm font-semibold text-gray-700 mb-1">
               Description
             </p>
@@ -182,7 +179,6 @@ const ProfileCard = ({ profile, type = "topFreelancer" }) => {
               {profile.description}
             </p>
           </div>
-        )}
       </div>
 
       {/* =========================Ï
@@ -202,10 +198,9 @@ const ProfileCard = ({ profile, type = "topFreelancer" }) => {
           font-semibold
           transition-all
           duration-200
-          mt-4
         "
       >
-        {type === "topFreelancer" ? "Book Consultation" : "View Profile"}
+        {type === "top" ? "Book Consultation" : "View Profile"}
       </button>
     </div>
   );

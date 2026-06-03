@@ -155,9 +155,9 @@ const HiredTalentsList = () => {
 
             {/* Profile Row */}
             <div className="flex items-center gap-4">
-              {talent.profileImage ? (
+              {talent.photo ? (
                 <img
-                  src={talent.profileImage}
+                  src={talent.photo}
                   alt={talent.name}
                   className="w-14 h-14 rounded-full object-cover border-2 border-gray-100 flex-shrink-0"
                 />

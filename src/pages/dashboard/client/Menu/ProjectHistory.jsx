@@ -1,135 +1,29 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Briefcase, CheckCircle, Clock, XCircle, Star,
   Calendar, ArrowUpDown, ChevronDown, Download,
   ArrowUpRight, MonitorSmartphone, Palette, Smartphone,
-  LayoutDashboard, User, IndianRupee, AlertCircle,
+  LayoutDashboard, User, IndianRupee, AlertCircle, Loader2,
 } from 'lucide-react';
 
-// ─── Demo Data ────────────────────────────────────────────────────────────────
-const PROJECTS = [
-  {
-    id: 1,
-    title: 'Grocery Delivery Web App',
-    freelancer: 'Sharad Kumar',
-    freelancerAvatar: 'SK',
-    category: 'Web Development',
-    startDate: '2024-03-10',
-    endDate: '2024-04-25',
-    duration: '1m 15d',
-    techStack: ['React', 'Node.js', 'MongoDB', 'Tailwind CSS'],
-    status: 'Completed',
-    progress: 100,
-    amount: 75000,
-    amountPaid: 75000,
-    rating: 4.9,
-    reviewsCount: 18,
-    description: 'Full-stack grocery delivery platform with user, rider and admin panels.',
-    deliverables: ['Source Code', 'Admin Panel', 'Deployment', 'Documentation'],
-    timestamp: 1714003200000,
-    thumbnail: 'grocery',
-  },
-  {
-    id: 2,
-    title: 'Personal Portfolio Website',
-    freelancer: 'Neha Sharma',
-    freelancerAvatar: 'NS',
-    category: 'Web Design',
-    startDate: '2024-05-01',
-    endDate: null,
-    duration: '15 days',
-    techStack: ['Figma', 'HTML', 'CSS', 'JavaScript'],
-    status: 'In Progress',
-    progress: 75,
-    amount: 8500,
-    amountPaid: 4250,
-    rating: null,
-    reviewsCount: 0,
-    description: 'Modern and responsive portfolio website for showcasing UI/UX work.',
-    deliverables: ['Homepage Design', 'About & Services', 'Portfolio Gallery', 'Contact Form'],
-    timestamp: 1714608000000,
-    thumbnail: 'portfolio',
-  },
-  {
-    id: 3,
-    title: 'Fitness Tracker Mobile App',
-    freelancer: 'Pooja Singh',
-    freelancerAvatar: 'PS',
-    category: 'Mobile App',
-    startDate: '2024-01-15',
-    endDate: '2024-03-05',
-    duration: '1m 20d',
-    techStack: ['React Native', 'Firebase', 'Redux', 'Expo'],
-    status: 'Completed',
-    progress: 100,
-    amount: 60000,
-    amountPaid: 60000,
-    rating: 4.7,
-    reviewsCount: 12,
-    description: 'Cross-platform fitness tracking app with workout plans and progress analytics.',
-    deliverables: ['iOS App', 'Android App', 'Backend API', 'Admin Dashboard'],
-    timestamp: 1709596800000,
-    thumbnail: 'fitness',
-  },
-  {
-    id: 4,
-    title: 'E-commerce Admin Dashboard',
-    freelancer: 'Amit Joshi',
-    freelancerAvatar: 'AJ',
-    category: 'Web Development',
-    startDate: '2023-12-01',
-    endDate: '2023-12-20',
-    duration: '20 days',
-    techStack: ['Vue.js', 'Vuex', 'Chart.js', 'SCSS'],
-    status: 'Cancelled',
-    progress: 40,
-    amount: 35000,
-    amountPaid: 14000,
-    rating: null,
-    reviewsCount: 0,
-    description: 'Admin dashboard for managing products, orders and users.',
-    deliverables: [],
-    cancelReason: 'Freelancer was unresponsive',
-    timestamp: 1703030400000,
-    thumbnail: 'dashboard',
-  },
-  {
-    id: 5,
-    title: 'Restaurant Booking Platform',
-    freelancer: 'Rohit Verma',
-    freelancerAvatar: 'RV',
-    category: 'Web Development',
-    startDate: '2024-02-01',
-    endDate: '2024-03-10',
-    duration: '38 days',
-    techStack: ['Next.js', 'Prisma', 'PostgreSQL', 'Tailwind CSS'],
-    status: 'Completed',
-    progress: 100,
-    amount: 95000,
-    amountPaid: 95000,
-    rating: 5.0,
-    reviewsCount: 9,
-    description: 'Online table reservation system with real-time availability and email confirmations.',
-    deliverables: ['Web App', 'Admin Panel', 'Email Integration', 'Deployment'],
-    timestamp: 1710028800000,
-    thumbnail: 'restaurant',
-  },
-];
+const BASE_URL = import.meta.env.VITE_API_URL;
+const getToken = () => localStorage.getItem("token");
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const formatINR = (v) =>
-  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
+  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v || 0);
 
-const formatDate = (d) =>
-  new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+const formatDate = (d) => d
+  ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  : '—';
 
 // ─── Thumbnail ────────────────────────────────────────────────────────────────
 const THUMB_STYLES = {
-  grocery:    { bg: 'from-emerald-100 to-teal-50',   text: 'text-teal-600',   Icon: Briefcase        },
-  portfolio:  { bg: 'from-blue-100 to-indigo-50',    text: 'text-blue-600',   Icon: Palette          },
-  fitness:    { bg: 'from-purple-100 to-violet-50',  text: 'text-purple-600', Icon: Smartphone       },
-  dashboard:  { bg: 'from-rose-100 to-pink-50',      text: 'text-rose-500',   Icon: LayoutDashboard  },
-  restaurant: { bg: 'from-amber-100 to-orange-50',   text: 'text-amber-600',  Icon: MonitorSmartphone},
+  grocery:    { bg: 'from-emerald-100 to-teal-50',   text: 'text-teal-600',   Icon: Briefcase         },
+  portfolio:  { bg: 'from-blue-100 to-indigo-50',    text: 'text-blue-600',   Icon: Palette           },
+  fitness:    { bg: 'from-purple-100 to-violet-50',  text: 'text-purple-600', Icon: Smartphone        },
+  dashboard:  { bg: 'from-rose-100 to-pink-50',      text: 'text-rose-500',   Icon: LayoutDashboard   },
+  restaurant: { bg: 'from-amber-100 to-orange-50',   text: 'text-amber-600',  Icon: MonitorSmartphone },
 };
 
 function Thumbnail({ type }) {
@@ -143,8 +37,10 @@ function Thumbnail({ type }) {
 }
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
-function Avatar({ initials }) {
-  return (
+function Avatar({ initials, photo }) {
+  return photo ? (
+    <img src={photo} alt={initials} className="w-6 h-6 rounded-full object-cover shrink-0" />
+  ) : (
     <div className="w-6 h-6 rounded-full bg-teal-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
       {initials}
     </div>
@@ -153,9 +49,9 @@ function Avatar({ initials }) {
 
 // ─── Status Config ────────────────────────────────────────────────────────────
 const STATUS = {
-  Completed:    { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', bar: 'bg-emerald-500' },
-  'In Progress':{ bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200',   bar: 'bg-amber-400'   },
-  Cancelled:    { bg: 'bg-rose-50',    text: 'text-rose-700',    border: 'border-rose-200',    bar: 'bg-rose-400'    },
+  Completed:     { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', bar: 'bg-emerald-500' },
+  'In Progress': { bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200',   bar: 'bg-amber-400'   },
+  Cancelled:     { bg: 'bg-rose-50',    text: 'text-rose-700',    border: 'border-rose-200',    bar: 'bg-rose-400'    },
 };
 
 const CAT_COLORS = {
@@ -167,9 +63,9 @@ const CAT_COLORS = {
 // ─── Project Card ─────────────────────────────────────────────────────────────
 function ProjectCard({ project }) {
   const [expanded, setExpanded] = useState(false);
-  const s = STATUS[project.status];
-  const MAX_TECH = 4;
-  const extraTech = project.techStack.length - MAX_TECH;
+  const s = STATUS[project.status] || STATUS['In Progress'];
+  const MAX_TECH  = 4;
+  const extraTech = (project.techStack?.length || 0) - MAX_TECH;
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-teal-200 transition-all duration-200">
@@ -185,8 +81,6 @@ function ProjectCard({ project }) {
 
           {/* Left: meta */}
           <div className="flex-1 space-y-2.5">
-
-            {/* Title + status */}
             <div className="flex flex-wrap items-start gap-2">
               <h3 className="text-sm font-black text-slate-900 leading-snug">{project.title}</h3>
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${s.bg} ${s.text} ${s.border}`}>
@@ -194,10 +88,9 @@ function ProjectCard({ project }) {
               </span>
             </div>
 
-            {/* Freelancer + category */}
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
               <div className="flex items-center gap-1.5">
-                <Avatar initials={project.freelancerAvatar} />
+                <Avatar initials={project.freelancerAvatar} photo={project.freelancerPhoto} />
                 <span>Freelancer: <span className="font-semibold text-slate-700">{project.freelancer}</span></span>
               </div>
               <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${CAT_COLORS[project.category] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
@@ -205,7 +98,6 @@ function ProjectCard({ project }) {
               </span>
             </div>
 
-            {/* Dates + duration */}
             <div className="flex items-center gap-1.5 text-xs text-slate-500">
               <Calendar className="w-3.5 h-3.5 shrink-0 text-slate-400" />
               <span>{formatDate(project.startDate)} – {project.endDate ? formatDate(project.endDate) : 'Ongoing'}</span>
@@ -214,9 +106,8 @@ function ProjectCard({ project }) {
               <span>{project.duration}</span>
             </div>
 
-            {/* Tech stack */}
             <div className="flex flex-wrap gap-1.5">
-              {project.techStack.slice(0, MAX_TECH).map((t, i) => (
+              {(project.techStack || []).slice(0, MAX_TECH).map((t, i) => (
                 <span key={i} className="text-[10px] font-medium bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{t}</span>
               ))}
               {extraTech > 0 && (
@@ -225,11 +116,10 @@ function ProjectCard({ project }) {
             </div>
           </div>
 
-          {/* Middle: description + progress + deliverables */}
+          {/* Middle */}
           <div className="md:w-56 space-y-2.5">
             <p className="text-[11px] text-slate-500 leading-relaxed line-clamp-2">{project.description}</p>
 
-            {/* Progress */}
             <div className="space-y-1">
               <div className="flex justify-between text-[10px] font-semibold text-slate-500">
                 <span>
@@ -245,25 +135,21 @@ function ProjectCard({ project }) {
               </div>
             </div>
 
-            {/* Deliverables or cancel reason */}
             {project.status === 'Cancelled' && project.cancelReason ? (
               <p className="text-[10px] text-rose-500 font-semibold flex items-center gap-1">
                 <AlertCircle className="w-3 h-3 shrink-0" /> {project.cancelReason}
               </p>
             ) : (
-              project.deliverables.length > 0 && (
+              (project.deliverables?.length > 0) && (
                 <div className="space-y-0.5">
                   {(expanded ? project.deliverables : project.deliverables.slice(0, 2)).map((d, i) => (
                     <div key={i} className="flex items-center gap-1.5 text-[10px] text-slate-600">
-                      <CheckCircle className="w-3 h-3 text-teal-500 shrink-0" />
-                      {d}
+                      <CheckCircle className="w-3 h-3 text-teal-500 shrink-0" />{d}
                     </div>
                   ))}
                   {project.deliverables.length > 2 && (
-                    <button
-                      onClick={() => setExpanded(e => !e)}
-                      className="text-[10px] font-bold text-teal-600 hover:text-teal-800 transition-colors"
-                    >
+                    <button onClick={() => setExpanded(e => !e)}
+                      className="text-[10px] font-bold text-teal-600 hover:text-teal-800 transition-colors">
                       {expanded ? '− less' : `+ ${project.deliverables.length - 2} more`}
                     </button>
                   )}
@@ -272,10 +158,8 @@ function ProjectCard({ project }) {
             )}
           </div>
 
-          {/* Right: amount + payment info + actions */}
+          {/* Right */}
           <div className="md:w-40 flex flex-col items-start md:items-end gap-2.5">
-
-            {/* Amount */}
             <div className="text-right">
               <div className="text-xl font-black text-slate-900">{formatINR(project.amount)}</div>
               <div className="text-[10px] text-slate-400">
@@ -283,7 +167,6 @@ function ProjectCard({ project }) {
               </div>
             </div>
 
-            {/* Amount paid so far (for In Progress) */}
             {project.status === 'In Progress' && (
               <div className="text-right">
                 <div className="text-xs font-bold text-teal-600">{formatINR(project.amountPaid)} paid</div>
@@ -291,7 +174,6 @@ function ProjectCard({ project }) {
               </div>
             )}
 
-            {/* Refund info for Cancelled */}
             {project.status === 'Cancelled' && (
               <div className="text-right">
                 <div className="text-xs font-bold text-rose-500">{formatINR(project.amountPaid)} paid</div>
@@ -299,7 +181,6 @@ function ProjectCard({ project }) {
               </div>
             )}
 
-            {/* Rating */}
             {project.status === 'Completed' && project.rating ? (
               <div className="flex items-center gap-1">
                 <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
@@ -312,15 +193,12 @@ function ProjectCard({ project }) {
               </span>
             )}
 
-            {/* Buttons */}
-            <button
-              disabled={project.status === 'Cancelled'}
+            <button disabled={project.status === 'Cancelled'}
               className={`flex items-center gap-1.5 w-full justify-center px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all ${
                 project.status === 'Cancelled'
                   ? 'border-slate-200 text-slate-300 cursor-not-allowed'
                   : 'border-teal-600 text-teal-600 hover:bg-teal-600 hover:text-white'
-              }`}
-            >
+              }`}>
               <ArrowUpRight className="w-3.5 h-3.5" />
               {project.status === 'Completed' ? 'View Summary' : 'View Details'}
             </button>
@@ -328,41 +206,62 @@ function ProjectCard({ project }) {
               <Download className="w-3.5 h-3.5" /> Download Files
             </button>
           </div>
-
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Main ─────────────────────────────────────────────────────────────────────
 export default function ClientProjectHistory() {
   const [activeFilter, setActiveFilter] = useState('All');
-  const [sortBy, setSortBy] = useState('recent');
+  const [sortBy, setSortBy]             = useState('recent');
+  const [projects, setProjects]         = useState([]);
+  const [metrics, setMetrics]           = useState({});
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState(null);
 
-  const metrics = useMemo(() => {
-    const total      = PROJECTS.length;
-    const completed  = PROJECTS.filter(p => p.status === 'Completed').length;
-    const inProgress = PROJECTS.filter(p => p.status === 'In Progress').length;
-    const cancelled  = PROJECTS.filter(p => p.status === 'Cancelled').length;
-    const totalSpent = PROJECTS.filter(p => p.status === 'Completed').reduce((s, p) => s + p.amountPaid, 0);
-    const avgRating  = (() => {
-      const rated = PROJECTS.filter(p => p.rating);
-      return rated.length ? (rated.reduce((s, p) => s + p.rating, 0) / rated.length).toFixed(1) : '—';
-    })();
-    const totalReviews = PROJECTS.reduce((s, p) => s + p.reviewsCount, 0);
-    return { total, completed, inProgress, cancelled, totalSpent, avgRating, totalReviews };
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const res  = await fetch(`${BASE_URL}/api/client/project-history`, {
+          headers: { Authorization: `Bearer ${getToken()}` },
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message);
+        setProjects(data.projects || []);
+        setMetrics(data.metrics  || {});
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, []);
 
   const displayed = useMemo(() => {
-    let r = [...PROJECTS];
+    let r = [...projects];
     if (activeFilter !== 'All') r = r.filter(p => p.status === activeFilter);
-    if (sortBy === 'recent')   r.sort((a, b) => b.timestamp - a.timestamp);
-    if (sortBy === 'highest')  r.sort((a, b) => b.amount - a.amount);
-    if (sortBy === 'lowest')   r.sort((a, b) => a.amount - b.amount);
-    if (sortBy === 'rating')   r.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    if (sortBy === 'recent')  r.sort((a, b) => b.timestamp - a.timestamp);
+    if (sortBy === 'highest') r.sort((a, b) => b.amount - a.amount);
+    if (sortBy === 'lowest')  r.sort((a, b) => a.amount - b.amount);
+    if (sortBy === 'rating')  r.sort((a, b) => (b.rating || 0) - (a.rating || 0));
     return r;
-  }, [activeFilter, sortBy]);
+  }, [projects, activeFilter, sortBy]);
+
+  if (loading) return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
+    </div>
+  );
+
+  if (error) return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <p className="text-rose-500 font-medium">{error}</p>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 p-4 md:p-8 font-sans">
@@ -377,13 +276,12 @@ export default function ClientProjectHistory() {
           </p>
         </div>
 
-        {/* Metric Cards */}
+        {/* Metrics */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-
           <div className="bg-white p-4 rounded-xl border border-teal-100 shadow-sm flex items-center gap-4">
             <div className="p-3 bg-teal-50 rounded-lg text-teal-600"><Briefcase className="w-6 h-6" /></div>
             <div>
-              <div className="text-2xl font-bold text-slate-900">{metrics.total}</div>
+              <div className="text-2xl font-bold text-slate-900">{metrics.total || 0}</div>
               <div className="text-xs font-semibold text-slate-600">Total Projects</div>
               <div className="text-[10px] text-slate-400">All time</div>
             </div>
@@ -392,10 +290,10 @@ export default function ClientProjectHistory() {
           <div className="bg-white p-4 rounded-xl border border-teal-100 shadow-sm flex items-center gap-4">
             <div className="p-3 bg-emerald-50 rounded-lg text-emerald-600"><CheckCircle className="w-6 h-6" /></div>
             <div>
-              <div className="text-2xl font-bold text-slate-900">{metrics.completed}</div>
+              <div className="text-2xl font-bold text-slate-900">{metrics.completed || 0}</div>
               <div className="text-xs font-semibold text-slate-600">Completed</div>
               <div className="text-[10px] text-emerald-600 font-medium">
-                {((metrics.completed / metrics.total) * 100).toFixed(1)}% success rate
+                {metrics.total ? ((metrics.completed / metrics.total) * 100).toFixed(1) : 0}% success rate
               </div>
             </div>
           </div>
@@ -403,7 +301,7 @@ export default function ClientProjectHistory() {
           <div className="bg-white p-4 rounded-xl border border-teal-100 shadow-sm flex items-center gap-4">
             <div className="p-3 bg-amber-50 rounded-lg text-amber-600"><Clock className="w-6 h-6" /></div>
             <div>
-              <div className="text-2xl font-bold text-slate-900">{metrics.inProgress}</div>
+              <div className="text-2xl font-bold text-slate-900">{metrics.inProgress || 0}</div>
               <div className="text-xs font-semibold text-slate-600">In Progress</div>
               <div className="text-[10px] text-amber-600 font-medium">Currently active</div>
             </div>
@@ -412,7 +310,7 @@ export default function ClientProjectHistory() {
           <div className="bg-white p-4 rounded-xl border border-teal-100 shadow-sm flex items-center gap-4">
             <div className="p-3 bg-rose-50 rounded-lg text-rose-500"><XCircle className="w-6 h-6" /></div>
             <div>
-              <div className="text-2xl font-bold text-slate-900">{metrics.cancelled}</div>
+              <div className="text-2xl font-bold text-slate-900">{metrics.cancelled || 0}</div>
               <div className="text-xs font-semibold text-slate-600">Cancelled</div>
               <div className="text-[10px] text-rose-400">Not completed</div>
             </div>
@@ -426,10 +324,9 @@ export default function ClientProjectHistory() {
               <div className="text-[10px] text-teal-600">On completed projects</div>
             </div>
           </div>
-
         </div>
 
-        {/* Filter + Sort Row */}
+        {/* Filter + Sort */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-1">
           <div className="flex bg-slate-200/70 p-1 rounded-lg max-w-max">
             {['All', 'Completed', 'In Progress', 'Cancelled'].map(tab => (
@@ -457,7 +354,7 @@ export default function ClientProjectHistory() {
           </div>
         </div>
 
-        {/* Project Cards */}
+        {/* Cards */}
         <div className="space-y-4">
           {displayed.length === 0 ? (
             <div className="bg-white border border-dashed border-slate-300 rounded-xl p-12 text-center text-slate-400">

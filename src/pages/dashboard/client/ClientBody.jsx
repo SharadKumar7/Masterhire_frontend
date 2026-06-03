@@ -60,7 +60,7 @@ const FreelancerCarousel = ({ title, type, navigate }) => {
 
           name: f.fullName || `${f.firstName || ""} ${f.lastName || ""}`.trim(),
 
-          image: f.image || f.avatar || "https://via.placeholder.com/100",
+          image: f.photo || f.avatar || "https://via.placeholder.com/100",
 
           location: [f.city, f.state].filter(Boolean).join(", ") || "India",
 
@@ -70,17 +70,14 @@ const FreelancerCarousel = ({ title, type, navigate }) => {
 
           jobsDone: f.totalJobs || 0,
 
-          expertise: Array.isArray(f.domain)
-            ? f.domain.join(", ")
-            : Array.isArray(f.skills)
-              ? f.skills.join(", ")
-              : "No expertise",
+          expertise: f.title || "Unknown Expertise",
 
-          description: f.description || f.bio || "",
+          description: f.bio || "unavailable",
 
           rating: f.rating || 5,
 
           isSaved: f.isSaved || false,
+
         }));
 
         setFreelancers(formatted);
@@ -126,7 +123,7 @@ const FreelancerCarousel = ({ title, type, navigate }) => {
                 onClick={() => navigate(`/profile/${profile._id}`)}
                 className="cursor-pointer min-w-[320px] max-w-[320px] flex-shrink-0"
               >
-                <ProfileCard profile={profile} />
+                <ProfileCard profile={profile} type={type} />
               </div>
             ))
           ) : (
