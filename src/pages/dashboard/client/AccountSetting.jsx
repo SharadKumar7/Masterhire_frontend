@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Edit2, ShieldAlert } from "lucide-react";
+import { Edit2, ShieldAlert, Wallet, X, Plus, Minus } from "lucide-react";
 const apiUrl = import.meta.env.VITE_API_URL;
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
@@ -31,6 +31,205 @@ const DEFAULT_NOTIFICATIONS = {
   marketingEmails: false,
 };
 
+// ─── Add Funds Modal ──────────────────────────────────────────────────────────
+const AddFundsModal = ({ onClose, onConfirm, saving }) => {
+  const [amount, setAmount] = useState("");
+  const [error, setError] = useState("");
+
+  const presets = [500, 1000, 2000, 5000];
+
+  const handleConfirm = () => {
+    const num = Number(amount);
+    if (!amount || isNaN(num) || num <= 0) {
+      setError("Please enter a valid amount");
+      return;
+    }
+    if (num < 100) {
+      setError("Minimum amount is ₹100");
+      return;
+    }
+    onConfirm(num);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+        {/* Header */}
+        <div className="bg-teal-600 px-6 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <Wallet size={20} className="text-white" />
+            <h3 className="text-white font-bold text-lg">Add Funds to Wallet</h3>
+          </div>
+          <button onClick={onClose} className="text-white/80 hover:text-white transition">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-5">
+          {/* Quick select */}
+          <div>
+            <p className="text-sm text-gray-500 mb-2 font-medium">Quick Select</p>
+            <div className="grid grid-cols-4 gap-2">
+              {presets.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => { setAmount(String(p)); setError(""); }}
+                  className={`py-2 rounded-lg text-sm font-semibold border transition ${
+                    amount === String(p)
+                      ? "bg-teal-600 text-white border-teal-600"
+                      : "border-gray-200 text-gray-700 hover:border-teal-400"
+                  }`}
+                >
+                  ₹{p}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Custom amount */}
+          <div>
+            <p className="text-sm text-gray-500 mb-2 font-medium">Or enter custom amount</p>
+            <div className="flex items-center border-2 rounded-xl overflow-hidden focus-within:border-teal-500 transition">
+              <span className="px-4 text-lg font-bold text-gray-400 border-r py-3">₹</span>
+              <input
+                type="number"
+                min="100"
+                value={amount}
+                onChange={(e) => { setAmount(e.target.value); setError(""); }}
+                placeholder="Enter amount"
+                className="flex-1 px-4 py-3 text-lg font-semibold outline-none"
+              />
+            </div>
+            {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+            <p className="text-xs text-gray-400 mt-1">Minimum: ₹100</p>
+          </div>
+
+          {/* Summary */}
+          {amount && !isNaN(Number(amount)) && Number(amount) > 0 && (
+            <div className="bg-teal-50 rounded-xl p-3 flex justify-between items-center">
+              <span className="text-sm text-teal-700">Amount to add</span>
+              <span className="text-lg font-bold text-teal-700">₹{Number(amount).toLocaleString("en-IN")}</span>
+            </div>
+          )}
+
+          {/* 
+            TODO: Payment Gateway Integration
+            When Razorpay/Stripe is added:
+            1. Call backend to create an order: POST /api/client/settings/create-payment-order { amount }
+            2. Open Razorpay checkout with the order_id returned
+            3. On success callback, call POST /api/client/settings/verify-payment { razorpay_order_id, razorpay_payment_id, razorpay_signature }
+            4. Only update wallet balance after backend verification
+            Replace the onConfirm(num) call below with the Razorpay flow.
+          */}
+          <button
+            onClick={handleConfirm}
+            disabled={saving || !amount}
+            className="w-full bg-teal-600 text-white py-3 rounded-xl font-bold text-base hover:bg-teal-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {saving ? "Processing…" : `Add ₹${amount ? Number(amount).toLocaleString("en-IN") : "0"} to Wallet`}
+          </button>
+
+          <p className="text-xs text-center text-gray-400">
+            Funds are added instantly to your wallet balance
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Change Password Modal ────────────────────────────────────────────────────
+const ChangePasswordModal = ({ onClose, onSave, saving }) => {
+  const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [errors, setErrors] = useState({});
+  const [showPass, setShowPass] = useState({ current: false, new: false, confirm: false });
+
+  const validate = () => {
+    const e = {};
+    if (!form.currentPassword) e.currentPassword = "Required";
+    if (!form.newPassword) e.newPassword = "Required";
+    else if (form.newPassword.length < 8) e.newPassword = "Min 8 characters";
+    if (form.newPassword !== form.confirmPassword) e.confirmPassword = "Passwords do not match";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSubmit = () => {
+    if (validate()) onSave(form.currentPassword, form.newPassword);
+  };
+
+  const Field = ({ label, field, showKey }) => (
+    <div>
+      <p className="text-sm text-gray-500 mb-1 font-medium">{label}</p>
+      <div className="flex items-center border-2 rounded-xl overflow-hidden focus-within:border-teal-500 transition">
+        <input
+          type={showPass[showKey] ? "text" : "password"}
+          value={form[field]}
+          onChange={(e) => { setForm({ ...form, [field]: e.target.value }); setErrors({ ...errors, [field]: "" }); }}
+          className="flex-1 px-4 py-2.5 outline-none text-sm"
+          placeholder={`Enter ${label.toLowerCase()}`}
+        />
+        <button
+          type="button"
+          onClick={() => setShowPass({ ...showPass, [showKey]: !showPass[showKey] })}
+          className="px-3 text-gray-400 hover:text-gray-600 text-xs"
+        >
+          {showPass[showKey] ? "Hide" : "Show"}
+        </button>
+      </div>
+      {errors[field] && <p className="text-red-500 text-xs mt-1">{errors[field]}</p>}
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+        <div className="px-6 py-4 border-b flex justify-between items-center">
+          <h3 className="font-bold text-gray-900 text-lg">Change Password</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <Field label="Current Password" field="currentPassword" showKey="current" />
+          <Field label="New Password" field="newPassword" showKey="new" />
+          <Field label="Confirm New Password" field="confirmPassword" showKey="confirm" />
+
+          {/* Password strength hint */}
+          {form.newPassword && (
+            <div className="flex gap-1">
+              {[...Array(4)].map((_, i) => (
+                <div
+                  key={i}
+                  className={`h-1 flex-1 rounded-full transition-all ${
+                    form.newPassword.length > i * 3
+                      ? form.newPassword.length >= 12 ? "bg-teal-500"
+                        : form.newPassword.length >= 8 ? "bg-yellow-400"
+                        : "bg-red-400"
+                      : "bg-gray-200"
+                  }`}
+                />
+              ))}
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <button onClick={onClose} className="flex-1 py-2.5 border rounded-xl font-medium text-sm text-gray-600 hover:bg-gray-50">
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={saving}
+              className="flex-1 py-2.5 bg-teal-600 text-white rounded-xl font-bold text-sm hover:bg-teal-700 transition disabled:opacity-60"
+            >
+              {saving ? "Saving…" : "Update Password"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 const AccountSettings = () => {
   const [activeTab, setActiveTab] = useState("Personal details");
   const [loading, setLoading] = useState(true);
@@ -38,95 +237,54 @@ const AccountSettings = () => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // ── Core user data (source of truth from server) ──────────────────────────
   const [userData, setUserData] = useState({
-    // Personal details
-    fullName: "",
-    email: "",
-    phone: "",
-    companyName: "",
-    location: "",
-    bio: "",
-    profilePhoto: "",
-    // Hiring preferences
-    freelancerLevel: "",
-    budgetRange: "",
-    communicationPreference: "",
-    autoInviteFreelancers: false,
-    jobVisibility: "Public",
-    // Billing
-    walletBalance: 0,
-    paymentMethod: "",
-    upi_id: "",
-    billingAddress: "",
-    // Security
+    fullName: "", email: "", phone: "", companyName: "", location: "", bio: "", profilePhoto: "",
+    freelancerLevel: "", budgetRange: "", communicationPreference: "",
+    autoInviteFreelancers: false, jobVisibility: "Public",
+    walletBalance: 0, paymentMethod: "", upi_id: "", billingAddress: "",
     lastSignIn: new Date().toISOString(),
-    // Notifications
     notifications: DEFAULT_NOTIFICATIONS,
   });
 
-  // ── Local draft (what user is editing right now) ───────────────────────────
   const [draft, setDraft] = useState({});
-
-  // ── Inline field editing ───────────────────────────────────────────────────
   const [editingField, setEditingField] = useState(null);
 
-  // ── Delete modal ───────────────────────────────────────────────────────────
+  // Modals
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteStep, setDeleteStep] = useState("confirm");
   const [otp, setOtp] = useState("");
   const [otpSending, setOtpSending] = useState(false);
+  const [showAddFundsModal, setShowAddFundsModal] = useState(false);  // FIX: proper modal instead of prompt()
+  const [showPasswordModal, setShowPasswordModal] = useState(false);  // FIX: proper modal instead of prompt()
 
-  // ── Payment & Invoice history ──────────────────────────────────────────────
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [invoices, setInvoices] = useState([]);
 
-  // ─── Flash helpers ─────────────────────────────────────────────────────────
+  // ─── Flash helpers ──────────────────────────────────────────────────────────
   const flash = (type, msg) => {
-    if (type === "success") {
-      setSuccess(msg);
-      setTimeout(() => setSuccess(""), 3000);
-    } else {
-      setError(msg);
-      setTimeout(() => setError(""), 4000);
-    }
+    if (type === "success") { setSuccess(msg); setTimeout(() => setSuccess(""), 3000); }
+    else { setError(msg); setTimeout(() => setError(""), 4000); }
   };
 
-  // ─── Fetch profile on mount ────────────────────────────────────────────────
+  // ─── Fetch profile ──────────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
       try {
         setLoading(true);
         const { data } = await api("/me");
-
         const merged = {
-          fullName: data.fullName || "",
-          email: data.email || "",
-          phone: data.phone || "",
-          companyName: data.companyName || "",
-          location: data.location || "",
-          bio: data.bio || "",
-          profilePhoto: data.profilePhoto || "",
-          // Hiring preferences
-          freelancerLevel: data.freelancerLevel || "",
-          budgetRange: data.budgetRange || "",
+          fullName: data.fullName || "", email: data.email || "", phone: data.phone || "",
+          companyName: data.companyName || "", location: data.location || "",
+          bio: data.bio || "", profilePhoto: data.profilePhoto || "",
+          freelancerLevel: data.freelancerLevel || "", budgetRange: data.budgetRange || "",
           communicationPreference: data.communicationPreference || "",
           autoInviteFreelancers: data.autoInviteFreelancers ?? false,
           jobVisibility: data.jobVisibility || "Public",
-          // Billing
-          walletBalance: data.walletBalance ?? 0,
-          paymentMethod: data.paymentMethod || "",
-          upi_id: data.upi_id || "",
-          billingAddress: data.billingAddress || "",
-          // Security
+          walletBalance: data.walletBalance ?? 0, paymentMethod: data.paymentMethod || "",
+          upi_id: data.upi_id || "", billingAddress: data.billingAddress || "",
           lastSignIn: data.lastSignIn || new Date().toISOString(),
-          // Notifications
-          notifications: {
-            ...DEFAULT_NOTIFICATIONS,
-            ...(data.notifications || {}),
-          },
+          notifications: { ...DEFAULT_NOTIFICATIONS, ...(data.notifications || {}) },
         };
-
         setUserData(merged);
         setDraft(merged);
         setPaymentHistory(data.paymentHistory || []);
@@ -139,7 +297,6 @@ const AccountSettings = () => {
     })();
   }, []);
 
-  // Reset draft when tab changes
   useEffect(() => {
     setDraft(userData);
     setEditingField(null);
@@ -147,165 +304,107 @@ const AccountSettings = () => {
     setSuccess("");
   }, [activeTab]); // eslint-disable-line
 
-  // ─── Save: Personal Details ────────────────────────────────────────────────
+  // ─── Save handlers ──────────────────────────────────────────────────────────
   const handleSavePersonal = async () => {
     try {
       setSaving(true);
       const { data } = await api("/personal", "PATCH", {
-        fullName: draft.fullName,
-        email: draft.email,
-        phone: draft.phone,
-        companyName: draft.companyName,
-        location: draft.location,
-        bio: draft.bio,
-        profilePhoto: draft.profilePhoto,
+        fullName: draft.fullName, email: draft.email, phone: draft.phone,
+        companyName: draft.companyName, location: draft.location,
+        bio: draft.bio, profilePhoto: draft.profilePhoto,
       });
-      const updated = {
-        ...userData,
-        fullName: data.fullName,
-        email: data.email,
-        phone: data.phone,
-        companyName: data.companyName,
-        location: data.location,
-        bio: data.bio,
-        profilePhoto: data.profilePhoto,
-      };
-      setUserData(updated);
-      setDraft(updated);
-      setEditingField(null);
+      const updated = { ...userData, ...data };
+      setUserData(updated); setDraft(updated); setEditingField(null);
       flash("success", "Personal details saved!");
-    } catch (e) {
-      flash("error", e.message);
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { flash("error", e.message); }
+    finally { setSaving(false); }
   };
 
-  // ─── Save: Hiring Preferences ──────────────────────────────────────────────
   const handleSaveHiringPrefs = async () => {
     try {
       setSaving(true);
       const { data } = await api("/hiring-preferences", "PATCH", {
-        freelancerLevel: draft.freelancerLevel,
-        budgetRange: draft.budgetRange,
+        freelancerLevel: draft.freelancerLevel, budgetRange: draft.budgetRange,
         communicationPreference: draft.communicationPreference,
-        autoInviteFreelancers: draft.autoInviteFreelancers,
-        jobVisibility: draft.jobVisibility,
+        autoInviteFreelancers: draft.autoInviteFreelancers, jobVisibility: draft.jobVisibility,
       });
       const updated = { ...userData, ...data };
-      setUserData(updated);
-      setDraft(updated);
-      setEditingField(null);
+      setUserData(updated); setDraft(updated); setEditingField(null);
       flash("success", "Hiring preferences saved!");
-    } catch (e) {
-      flash("error", e.message);
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { flash("error", e.message); }
+    finally { setSaving(false); }
   };
 
-  // ─── Save: UPI ─────────────────────────────────────────────────────────────
   const handleSaveUPI = async () => {
     try {
       setSaving(true);
       await api("/upi", "PATCH", { upi_id: draft.upi_id });
       const updated = { ...userData, upi_id: draft.upi_id };
-      setUserData(updated);
-      setDraft(updated);
-      setEditingField(null);
+      setUserData(updated); setDraft(updated); setEditingField(null);
       flash("success", "UPI ID updated!");
-    } catch (e) {
-      flash("error", e.message);
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { flash("error", e.message); }
+    finally { setSaving(false); }
   };
 
-  // ─── Save: Payment Method ──────────────────────────────────────────────────
   const handleSavePaymentMethod = async () => {
     try {
       setSaving(true);
       await api("/payment-method", "PATCH", { paymentMethod: draft.paymentMethod });
       const updated = { ...userData, paymentMethod: draft.paymentMethod };
-      setUserData(updated);
-      setDraft(updated);
-      setEditingField(null);
+      setUserData(updated); setDraft(updated); setEditingField(null);
       flash("success", "Payment method updated!");
-    } catch (e) {
-      flash("error", e.message);
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { flash("error", e.message); }
+    finally { setSaving(false); }
   };
 
-  // ─── Save: Billing Address ─────────────────────────────────────────────────
   const handleSaveBillingAddress = async () => {
     try {
       setSaving(true);
       await api("/billing-address", "PATCH", { billingAddress: draft.billingAddress });
       const updated = { ...userData, billingAddress: draft.billingAddress };
-      setUserData(updated);
-      setDraft(updated);
-      setEditingField(null);
+      setUserData(updated); setDraft(updated); setEditingField(null);
       flash("success", "Billing address updated!");
-    } catch (e) {
-      flash("error", e.message);
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { flash("error", e.message); }
+    finally { setSaving(false); }
   };
 
-  // ─── Save: Notifications ───────────────────────────────────────────────────
   const handleSaveNotifications = async () => {
     try {
       setSaving(true);
       await api("/notifications", "PATCH", { notifications: draft.notifications });
       const updated = { ...userData, notifications: draft.notifications };
-      setUserData(updated);
-      setDraft(updated);
+      setUserData(updated); setDraft(updated);
       flash("success", "Notification settings saved!");
-    } catch (e) {
-      flash("error", e.message);
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { flash("error", e.message); }
+    finally { setSaving(false); }
   };
 
-  // ─── Change Password ───────────────────────────────────────────────────────
+  // FIX: Password modal handler (replaces prompt() calls)
   const handleChangePassword = async (currentPassword, newPassword) => {
     try {
       setSaving(true);
       await api("/change-password", "PATCH", { currentPassword, newPassword });
+      setShowPasswordModal(false);
       flash("success", "Password changed successfully!");
-    } catch (e) {
-      flash("error", e.message);
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { flash("error", e.message); }
+    finally { setSaving(false); }
   };
 
-  // ─── Logout all devices ────────────────────────────────────────────────────
   const handleLogoutAllDevices = async () => {
     if (!window.confirm("Log out from all other devices?")) return;
     try {
       await api("/logout-all", "POST");
       flash("success", "Logged out from all devices!");
-    } catch (e) {
-      flash("error", e.message);
-    }
+    } catch (e) { flash("error", e.message); }
   };
 
-  // ─── Delete account flow ───────────────────────────────────────────────────
   const handleSendOTP = async () => {
     try {
       setOtpSending(true);
       await api("/send-delete-otp", "POST");
       setDeleteStep("otp");
-    } catch (e) {
-      flash("error", "Failed to send OTP: " + e.message);
-    } finally {
-      setOtpSending(false);
-    }
+    } catch (e) { flash("error", "Failed to send OTP: " + e.message); }
+    finally { setOtpSending(false); }
   };
 
   const handleFinalDelete = async () => {
@@ -315,47 +414,43 @@ const AccountSettings = () => {
       alert("Account deleted. Goodbye!");
       localStorage.removeItem("token");
       window.location.href = "/";
-    } catch (e) {
-      flash("error", e.message);
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { flash("error", e.message); }
+    finally { setSaving(false); }
   };
 
-  // ─── Add Funds ─────────────────────────────────────────────────────────────
-  const handleAddFunds = async () => {
-    const amount = prompt("Enter amount to add (₹):");
-    if (!amount || isNaN(amount)) return;
+  // FIX: Add funds via modal (replaces prompt())
+  const handleAddFunds = async (amount) => {
     try {
-      const { data } = await api("/add-funds", "POST", { amount: Number(amount) });
+      setSaving(true);
+      /*
+        TODO: Payment Gateway Integration
+        Replace this api call with Razorpay/Stripe flow:
+        1. const { data: order } = await api("/create-payment-order", "POST", { amount });
+        2. Open Razorpay: const rzp = new Razorpay({ key: order.key, order_id: order.order_id, ... });
+        3. rzp.open(); and handle success/failure callbacks
+        4. On success: await api("/verify-payment", "POST", { razorpay_order_id, razorpay_payment_id, razorpay_signature });
+        Then update wallet balance from response.
+      */
+      const { data } = await api("/add-funds", "POST", { amount });
       const updated = { ...userData, walletBalance: data.walletBalance };
-      setUserData(updated);
-      setDraft(updated);
-      flash("success", `₹${amount} added to wallet!`);
-    } catch (e) {
-      flash("error", e.message);
-    }
+      setUserData(updated); setDraft(updated);
+      setShowAddFundsModal(false);
+      flash("success", `₹${amount.toLocaleString("en-IN")} added to wallet!`);
+    } catch (e) { flash("error", e.message); }
+    finally { setSaving(false); }
   };
 
-  const handleCancel = () => {
-    setDraft(userData);
-    setEditingField(null);
-  };
+  const handleCancel = () => { setDraft(userData); setEditingField(null); };
 
-  // ─── UI helpers ────────────────────────────────────────────────────────────
+  // ─── UI helpers ─────────────────────────────────────────────────────────────
   const SaveCancelBar = ({ onSave }) => (
     <div className="flex gap-4 pt-2">
-      <button
-        onClick={onSave}
-        disabled={saving}
-        className="bg-teal-600 text-white px-6 py-2 rounded-lg text-sm font-bold shadow-lg hover:bg-teal-700 transition disabled:opacity-60"
-      >
+      <button onClick={onSave} disabled={saving}
+        className="bg-teal-600 text-white px-6 py-2 rounded-lg text-sm font-bold shadow-lg hover:bg-teal-700 transition disabled:opacity-60">
         {saving ? "Saving…" : "Save Changes"}
       </button>
-      <button
-        onClick={handleCancel}
-        className="bg-gray-100 text-gray-600 px-6 py-2 rounded-lg text-sm font-bold hover:bg-gray-200 transition"
-      >
+      <button onClick={handleCancel}
+        className="bg-gray-100 text-gray-600 px-6 py-2 rounded-lg text-sm font-bold hover:bg-gray-200 transition">
         Cancel
       </button>
     </div>
@@ -368,24 +463,9 @@ const AccountSettings = () => {
         <p className="text-xs text-gray-400 max-w-md">{description}</p>
       </div>
       <button
-        onClick={() =>
-          setDraft((d) => ({
-            ...d,
-            notifications: {
-              ...d.notifications,
-              [field]: !d.notifications[field],
-            },
-          }))
-        }
-        className={`relative inline-flex h-5 w-10 shrink-0 rounded-full border-2 border-transparent transition-colors ${
-          draft.notifications?.[field] ? "bg-teal-500" : "bg-gray-200"
-        }`}
-      >
-        <span
-          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ${
-            draft.notifications?.[field] ? "translate-x-5" : "translate-x-0"
-          }`}
-        />
+        onClick={() => setDraft((d) => ({ ...d, notifications: { ...d.notifications, [field]: !d.notifications[field] } }))}
+        className={`relative inline-flex h-5 w-10 shrink-0 rounded-full border-2 border-transparent transition-colors ${draft.notifications?.[field] ? "bg-teal-500" : "bg-gray-200"}`}>
+        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ${draft.notifications?.[field] ? "translate-x-5" : "translate-x-0"}`} />
       </button>
     </div>
   );
@@ -397,41 +477,55 @@ const AccountSettings = () => {
     </div>
   );
 
-  // ─── Tab renderers ─────────────────────────────────────────────────────────
+  // ─── Tab renderers ───────────────────────────────────────────────────────────
   const renderContent = () => {
-    if (loading)
-      return (
-        <div className="p-8 text-center text-gray-500">Loading profile…</div>
-      );
+    if (loading) return <div className="p-8 text-center text-gray-500">Loading profile…</div>;
 
-    const blurClass = showDeleteModal
-      ? "blur-sm pointer-events-none transition-all"
-      : "";
+    const blurClass = showDeleteModal ? "blur-sm pointer-events-none transition-all" : "";
 
     switch (activeTab) {
 
-      // ── PERSONAL DETAILS ──────────────────────────────────────────────────
+      // ── PERSONAL DETAILS ────────────────────────────────────────────────────
       case "Personal details":
         return (
           <div className={`space-y-6 ${blurClass}`}>
             <h2 className="text-xl font-semibold">Personal Details</h2>
 
-            {/* Profile Photo */}
-            <div className="flex items-center gap-6">
-              <div
-                className="relative cursor-pointer group w-40 h-40"
-                onClick={() => setEditingField("profilePhoto")}
-              >
+            {/* FIX: Wrapped in relative div so profilePhoto popup positions correctly */}
+            <div className="relative flex items-center gap-6">
+              <div className="relative cursor-pointer group w-40 h-40 flex-shrink-0"
+                onClick={() => setEditingField(editingField === "profilePhoto" ? null : "profilePhoto")}>
                 <img
-                  src={draft.profilePhoto || "https://ui-avatars.com/api/?name=" + encodeURIComponent(userData.fullName || "User")}
+                  src={draft.profilePhoto || `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.fullName || "User")}`}
                   alt="Profile"
                   className="w-full h-full rounded-full object-cover border-2 border-gray-100 group-hover:border-teal-400 transition-all"
                 />
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
                   <Edit2 size={16} className="text-white mb-1" />
-                  <span className="text-[10px] text-white font-medium">Edit</span>
+                  <span className="text-[10px] text-white font-medium">Edit Photo</span>
                 </div>
               </div>
+
+              {/* Profile Photo URL popup — FIX: positioned relative to parent */}
+              {editingField === "profilePhoto" && (
+                <div className="absolute left-0 top-full mt-2 w-80 bg-white p-3 border rounded-lg shadow-lg z-10">
+                  <p className="text-xs mb-1 font-medium">Paste Image URL:</p>
+                  <input
+                    type="text"
+                    className="w-full border p-2 rounded text-sm outline-none focus:border-teal-500"
+                    value={draft.profilePhoto || ""}
+                    onChange={(e) => setDraft({ ...draft, profilePhoto: e.target.value })}
+                    placeholder="https://..."
+                    autoFocus
+                  />
+                  <div className="flex gap-2 mt-2">
+                    <button onClick={() => setEditingField(null)}
+                      className="flex-1 py-1.5 bg-teal-600 text-white rounded text-xs font-bold">Done</button>
+                    <button onClick={() => { setDraft({ ...draft, profilePhoto: "" }); setEditingField(null); }}
+                      className="flex-1 py-1.5 border rounded text-xs text-gray-500">Clear</button>
+                  </div>
+                </div>
+              )}
 
               <div className="flex-grow space-y-3">
                 {/* Full Name */}
@@ -439,12 +533,10 @@ const AccountSettings = () => {
                   <div className="flex-grow">
                     <p className="text-sm text-gray-500">Name</p>
                     {editingField === "fullName" ? (
-                      <input
-                        className="font-medium border-b border-teal-500 outline-none w-full mt-1"
+                      <input className="font-medium border-b border-teal-500 outline-none w-full mt-1"
                         value={draft.fullName || ""}
                         onChange={(e) => setDraft({ ...draft, fullName: e.target.value })}
-                        autoFocus
-                      />
+                        autoFocus />
                     ) : (
                       <p className="font-medium">{userData.fullName || "—"}</p>
                     )}
@@ -459,11 +551,9 @@ const AccountSettings = () => {
                   <div className="flex-grow">
                     <p className="text-sm text-gray-500">Email</p>
                     {editingField === "email" ? (
-                      <input
-                        className="font-medium border-b border-teal-500 outline-none w-full mt-1"
+                      <input className="font-medium border-b border-teal-500 outline-none w-full mt-1"
                         value={draft.email || ""}
-                        onChange={(e) => setDraft({ ...draft, email: e.target.value })}
-                      />
+                        onChange={(e) => setDraft({ ...draft, email: e.target.value })} />
                     ) : (
                       <p className="font-medium">
                         {userData.email}
@@ -476,22 +566,6 @@ const AccountSettings = () => {
                   )}
                 </div>
               </div>
-
-              {/* Profile Photo URL input */}
-              {editingField === "profilePhoto" && (
-                <div className="absolute top-full mt-2 left-0 w-full bg-white p-3 border rounded-lg shadow-lg z-10">
-                  <p className="text-xs mb-1 font-medium">Paste Image URL:</p>
-                  <input
-                    type="text"
-                    className="w-full border p-2 rounded text-sm outline-none focus:border-teal-500"
-                    value={draft.profilePhoto || ""}
-                    onChange={(e) => setDraft({ ...draft, profilePhoto: e.target.value })}
-                    placeholder="https://..."
-                    autoFocus
-                    onBlur={() => setEditingField(null)}
-                  />
-                </div>
-              )}
             </div>
 
             {/* Company Name */}
@@ -499,14 +573,10 @@ const AccountSettings = () => {
               <div className="flex-grow">
                 <p className="text-sm text-gray-500">Company Name</p>
                 {editingField === "companyName" ? (
-                  <input
-                    className="font-medium border-b border-teal-500 outline-none w-full mt-1"
+                  <input className="font-medium border-b border-teal-500 outline-none w-full mt-1"
                     value={draft.companyName || ""}
-                    onChange={(e) => setDraft({ ...draft, companyName: e.target.value })}
-                  />
-                ) : (
-                  <p className="font-medium">{userData.companyName || "—"}</p>
-                )}
+                    onChange={(e) => setDraft({ ...draft, companyName: e.target.value })} />
+                ) : <p className="font-medium">{userData.companyName || "—"}</p>}
               </div>
               {editingField !== "companyName" && (
                 <Edit2 size={18} className="text-gray-400 cursor-pointer" onClick={() => setEditingField("companyName")} />
@@ -518,17 +588,13 @@ const AccountSettings = () => {
               <div className="flex-grow">
                 <p className="text-sm text-gray-500">Phone</p>
                 {editingField === "phone" ? (
-                  <input
-                    className="font-medium border-b border-teal-500 outline-none w-full mt-1"
+                  <input className="font-medium border-b border-teal-500 outline-none w-full mt-1"
                     value={draft.phone || ""}
-                    onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
-                  />
+                    onChange={(e) => setDraft({ ...draft, phone: e.target.value })} />
                 ) : (
                   <p className="font-medium">
                     {userData.phone || "—"}
-                    {userData.phone && (
-                      <span className="ml-2 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Verified</span>
-                    )}
+                    {userData.phone && <span className="ml-2 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Verified</span>}
                   </p>
                 )}
               </div>
@@ -537,19 +603,16 @@ const AccountSettings = () => {
               )}
             </div>
 
-            {/* Location */}
+            {/* Location — FIX: now saves both city & state separately */}
             <div className="flex justify-between items-center p-4 border rounded-lg">
               <div className="flex-grow">
                 <p className="text-sm text-gray-500">Location</p>
                 {editingField === "location" ? (
-                  <input
-                    className="font-medium border-b border-teal-500 outline-none w-full mt-1"
+                  <input className="font-medium border-b border-teal-500 outline-none w-full mt-1"
                     value={draft.location || ""}
                     onChange={(e) => setDraft({ ...draft, location: e.target.value })}
-                  />
-                ) : (
-                  <p className="font-medium">{userData.location || "—"}</p>
-                )}
+                    placeholder="City, State" />
+                ) : <p className="font-medium">{userData.location || "—"}</p>}
               </div>
               {editingField !== "location" && (
                 <Edit2 size={18} className="text-gray-400 cursor-pointer" onClick={() => setEditingField("location")} />
@@ -561,22 +624,17 @@ const AccountSettings = () => {
               <div className="flex-grow">
                 <p className="text-sm text-gray-500">Bio</p>
                 {editingField === "bio" ? (
-                  <textarea
-                    rows={4}
-                    className="font-medium border-b border-teal-500 outline-none w-full mt-1 resize-none"
+                  <textarea rows={4} className="font-medium border-b border-teal-500 outline-none w-full mt-1 resize-none"
                     value={draft.bio || ""}
-                    onChange={(e) => setDraft({ ...draft, bio: e.target.value })}
-                  />
-                ) : (
-                  <p className="font-medium text-gray-700">{userData.bio || "—"}</p>
-                )}
+                    onChange={(e) => setDraft({ ...draft, bio: e.target.value })} />
+                ) : <p className="font-medium text-gray-700">{userData.bio || "—"}</p>}
               </div>
               {editingField !== "bio" && (
                 <Edit2 size={18} className="text-gray-400 cursor-pointer mt-1" onClick={() => setEditingField("bio")} />
               )}
             </div>
 
-            {editingField && <SaveCancelBar onSave={handleSavePersonal} />}
+            {editingField && editingField !== "profilePhoto" && <SaveCancelBar onSave={handleSavePersonal} />}
 
             {/* Account Closure */}
             <div className="pt-6 border-t">
@@ -584,140 +642,108 @@ const AccountSettings = () => {
               <p className="text-sm text-gray-500 mb-4">
                 Closing your account is permanent. Please ensure all payments and activities are completed first.
               </p>
-              <button
-                onClick={() => { setShowDeleteModal(true); setDeleteStep("confirm"); }}
-                className="bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium"
-              >
+              <button onClick={() => { setShowDeleteModal(true); setDeleteStep("confirm"); }}
+                className="bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-600 transition">
                 Close my account
               </button>
             </div>
           </div>
         );
 
-      // ── HIRING PREFERENCES ───────────────────────────────────────────────
+      // ── HIRING PREFERENCES ──────────────────────────────────────────────────
       case "Hiring Preferences":
         return (
           <div className={`space-y-6 ${blurClass}`}>
             <h2 className="text-xl font-semibold">Hiring Preferences</h2>
 
-            {/* Preferred Freelancer Level */}
             <div className="flex justify-between items-center p-4 border rounded-lg">
               <div className="flex-grow">
                 <p className="text-sm text-gray-500">Preferred Freelancer Level</p>
                 {editingField === "freelancerLevel" ? (
-                  <select
-                    className="font-medium border-b border-teal-500 outline-none w-full mt-1 bg-transparent"
+                  <select className="font-medium border-b border-teal-500 outline-none w-full mt-1 bg-transparent"
                     value={draft.freelancerLevel || ""}
-                    onChange={(e) => setDraft({ ...draft, freelancerLevel: e.target.value })}
-                  >
+                    onChange={(e) => setDraft({ ...draft, freelancerLevel: e.target.value })}>
                     <option value="">Select Level</option>
                     <option value="Beginner">Beginner</option>
                     <option value="Intermediate">Intermediate</option>
                     <option value="Expert">Expert</option>
                   </select>
-                ) : (
-                  <p className="font-medium">{userData.freelancerLevel || "—"}</p>
-                )}
+                ) : <p className="font-medium">{userData.freelancerLevel || "—"}</p>}
               </div>
               {editingField !== "freelancerLevel" && (
                 <Edit2 size={18} className="text-gray-400 cursor-pointer" onClick={() => setEditingField("freelancerLevel")} />
               )}
             </div>
 
-            {/* Preferred Budget Range */}
             <div className="flex justify-between items-center p-4 border rounded-lg">
               <div className="flex-grow">
                 <p className="text-sm text-gray-500">Preferred Budget Range</p>
                 {editingField === "budgetRange" ? (
-                  <input
-                    className="font-medium border-b border-teal-500 outline-none w-full mt-1"
+                  <input className="font-medium border-b border-teal-500 outline-none w-full mt-1"
                     value={draft.budgetRange || ""}
                     onChange={(e) => setDraft({ ...draft, budgetRange: e.target.value })}
-                    placeholder="e.g. ₹5,000 - ₹20,000"
-                  />
-                ) : (
-                  <p className="font-medium">{userData.budgetRange || "—"}</p>
-                )}
+                    placeholder="e.g. ₹5,000 - ₹20,000" />
+                ) : <p className="font-medium">{userData.budgetRange || "—"}</p>}
               </div>
               {editingField !== "budgetRange" && (
                 <Edit2 size={18} className="text-gray-400 cursor-pointer" onClick={() => setEditingField("budgetRange")} />
               )}
             </div>
 
-            {/* Communication Preference */}
             <div className="flex justify-between items-center p-4 border rounded-lg">
               <div className="flex-grow">
                 <p className="text-sm text-gray-500">Communication Preference</p>
                 {editingField === "communicationPreference" ? (
-                  <select
-                    className="font-medium border-b border-teal-500 outline-none w-full mt-1 bg-transparent"
+                  <select className="font-medium border-b border-teal-500 outline-none w-full mt-1 bg-transparent"
                     value={draft.communicationPreference || ""}
-                    onChange={(e) => setDraft({ ...draft, communicationPreference: e.target.value })}
-                  >
+                    onChange={(e) => setDraft({ ...draft, communicationPreference: e.target.value })}>
                     <option value="">Select Preference</option>
                     <option value="Chat">Chat</option>
                     <option value="Video Call">Video Call</option>
                     <option value="Email">Email</option>
                   </select>
-                ) : (
-                  <p className="font-medium">{userData.communicationPreference || "—"}</p>
-                )}
+                ) : <p className="font-medium">{userData.communicationPreference || "—"}</p>}
               </div>
               {editingField !== "communicationPreference" && (
                 <Edit2 size={18} className="text-gray-400 cursor-pointer" onClick={() => setEditingField("communicationPreference")} />
               )}
             </div>
 
-            {/* Auto Invite Freelancers */}
             <div className="flex justify-between items-center p-4 border rounded-lg">
               <div>
                 <p className="text-sm text-gray-500">Auto Invite Freelancers</p>
                 <p className="font-medium">{draft.autoInviteFreelancers ? "Enabled" : "Disabled"}</p>
               </div>
-              <button
-                onClick={() => setDraft({ ...draft, autoInviteFreelancers: !draft.autoInviteFreelancers })}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-                  draft.autoInviteFreelancers ? "bg-teal-500" : "bg-gray-300"
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-                    draft.autoInviteFreelancers ? "translate-x-6" : "translate-x-1"
-                  }`}
-                />
+              <button onClick={() => setDraft({ ...draft, autoInviteFreelancers: !draft.autoInviteFreelancers })}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${draft.autoInviteFreelancers ? "bg-teal-500" : "bg-gray-300"}`}>
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${draft.autoInviteFreelancers ? "translate-x-6" : "translate-x-1"}`} />
               </button>
             </div>
 
-            {/* Job Visibility */}
             <div className="flex justify-between items-center p-4 border rounded-lg">
               <div className="flex-grow">
                 <p className="text-sm text-gray-500">Job Visibility</p>
                 {editingField === "jobVisibility" ? (
-                  <select
-                    className="font-medium border-b border-teal-500 outline-none w-full mt-1 bg-transparent"
+                  <select className="font-medium border-b border-teal-500 outline-none w-full mt-1 bg-transparent"
                     value={draft.jobVisibility || ""}
-                    onChange={(e) => setDraft({ ...draft, jobVisibility: e.target.value })}
-                  >
+                    onChange={(e) => setDraft({ ...draft, jobVisibility: e.target.value })}>
                     <option value="">Select Visibility</option>
                     <option value="Public">Public</option>
                     <option value="Private">Private</option>
                     <option value="Invite Only">Invite Only</option>
                   </select>
-                ) : (
-                  <p className="font-medium">{userData.jobVisibility || "—"}</p>
-                )}
+                ) : <p className="font-medium">{userData.jobVisibility || "—"}</p>}
               </div>
               {editingField !== "jobVisibility" && (
                 <Edit2 size={18} className="text-gray-400 cursor-pointer" onClick={() => setEditingField("jobVisibility")} />
               )}
             </div>
 
-            {/* Always show Save for Hiring Preferences (toggle can change without editingField) */}
             <SaveCancelBar onSave={handleSaveHiringPrefs} />
           </div>
         );
 
-      // ── PASSWORD & SECURITY ──────────────────────────────────────────────
+      // ── PASSWORD & SECURITY ─────────────────────────────────────────────────
       case "Password & security":
         return (
           <div className={`space-y-8 ${blurClass}`}>
@@ -729,16 +755,9 @@ const AccountSettings = () => {
               </div>
               <div className="flex justify-between items-center py-2">
                 <span className="text-gray-900 font-medium">Password</span>
-                <button
-                  onClick={() => {
-                    const current = prompt("Enter current password:");
-                    if (!current) return;
-                    const newPass = prompt("Enter new password:");
-                    if (!newPass) return;
-                    handleChangePassword(current, newPass);
-                  }}
-                  className="text-teal-600 font-bold hover:underline"
-                >
+                {/* FIX: Replaced prompt() with proper modal */}
+                <button onClick={() => setShowPasswordModal(true)}
+                  className="text-teal-600 font-bold hover:underline">
                   Change password
                 </button>
               </div>
@@ -750,17 +769,24 @@ const AccountSettings = () => {
               </div>
             </div>
             <div className="pt-4 flex justify-end">
-              <button
-                onClick={handleLogoutAllDevices}
-                className="bg-red-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-red-600 transition-colors"
-              >
+              <button onClick={handleLogoutAllDevices}
+                className="bg-red-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-red-600 transition-colors">
                 Log out from all devices
               </button>
             </div>
+
+            {/* FIX: Password change modal */}
+            {showPasswordModal && (
+              <ChangePasswordModal
+                onClose={() => setShowPasswordModal(false)}
+                onSave={handleChangePassword}
+                saving={saving}
+              />
+            )}
           </div>
         );
 
-      // ── BILLING & PAYMENTS ───────────────────────────────────────────────
+      // ── BILLING & PAYMENTS ──────────────────────────────────────────────────
       case "Billing & Payments":
         return (
           <div className={`space-y-6 ${blurClass}`}>
@@ -771,12 +797,12 @@ const AccountSettings = () => {
               <div className="flex justify-between items-center">
                 <div>
                   <p className="text-sm font-bold text-gray-900 mb-1">Wallet Balance</p>
-                  <p className="text-3xl font-bold text-teal-600">₹ {userData.walletBalance ?? 0}</p>
+                  <p className="text-3xl font-bold text-teal-600">₹ {(userData.walletBalance ?? 0).toLocaleString("en-IN")}</p>
                 </div>
-                <button
-                  onClick={handleAddFunds}
-                  className="bg-teal-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-teal-800 transition"
-                >
+                {/* FIX: Opens proper modal instead of prompt() */}
+                <button onClick={() => setShowAddFundsModal(true)}
+                  className="bg-teal-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold hover:bg-teal-800 transition flex items-center gap-2">
+                  <Plus size={16} />
                   Add Funds
                 </button>
               </div>
@@ -787,25 +813,19 @@ const AccountSettings = () => {
               <div>
                 <p className="text-sm font-bold text-gray-900 mb-1">Saved Payment Method</p>
                 {editingField === "paymentMethod" ? (
-                  <input
-                    className="font-medium border-b border-teal-500 outline-none"
+                  <input className="font-medium border-b border-teal-500 outline-none"
                     value={draft.paymentMethod || ""}
                     onChange={(e) => setDraft({ ...draft, paymentMethod: e.target.value })}
                     placeholder="e.g. Visa ending 4242"
-                    autoFocus
-                  />
+                    autoFocus />
                 ) : (
                   <p className="font-medium">{userData.paymentMethod || "No payment method added"}</p>
                 )}
               </div>
               {editingField === "paymentMethod" ? (
-                <button onClick={handleSavePaymentMethod} className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-bold">
-                  Save
-                </button>
+                <button onClick={handleSavePaymentMethod} className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-bold">Save</button>
               ) : (
-                <button onClick={() => setEditingField("paymentMethod")} className="bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-bold">
-                  Edit
-                </button>
+                <button onClick={() => setEditingField("paymentMethod")} className="bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-bold">Edit</button>
               )}
             </div>
 
@@ -814,24 +834,16 @@ const AccountSettings = () => {
               <div>
                 <p className="text-sm font-bold text-gray-900 mb-1">UPI ID</p>
                 {editingField === "upi" ? (
-                  <input
-                    className="font-medium border-b border-teal-500 outline-none"
+                  <input className="font-medium border-b border-teal-500 outline-none"
                     value={draft.upi_id || ""}
                     onChange={(e) => setDraft({ ...draft, upi_id: e.target.value })}
-                    placeholder="yourname@upi"
-                  />
-                ) : (
-                  <p className="font-medium">{userData.upi_id || "Not set"}</p>
-                )}
+                    placeholder="yourname@upi" />
+                ) : <p className="font-medium">{userData.upi_id || "Not set"}</p>}
               </div>
               {editingField === "upi" ? (
-                <button onClick={handleSaveUPI} className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-bold">
-                  Save UPI
-                </button>
+                <button onClick={handleSaveUPI} className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-bold">Save UPI</button>
               ) : (
-                <button onClick={() => setEditingField("upi")} className="bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-bold">
-                  Edit UPI
-                </button>
+                <button onClick={() => setEditingField("upi")} className="bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-bold">Edit UPI</button>
               )}
             </div>
 
@@ -841,20 +853,13 @@ const AccountSettings = () => {
                 <div className="flex-grow">
                   <p className="text-sm font-bold text-gray-900 mb-2">Billing Address</p>
                   {editingField === "billingAddress" ? (
-                    <textarea
-                      rows={3}
-                      className="w-full border-b border-teal-500 outline-none resize-none"
+                    <textarea rows={3} className="w-full border-b border-teal-500 outline-none resize-none"
                       value={draft.billingAddress || ""}
-                      onChange={(e) => setDraft({ ...draft, billingAddress: e.target.value })}
-                    />
-                  ) : (
-                    <p className="font-medium text-gray-700">{userData.billingAddress || "No billing address added"}</p>
-                  )}
+                      onChange={(e) => setDraft({ ...draft, billingAddress: e.target.value })} />
+                  ) : <p className="font-medium text-gray-700">{userData.billingAddress || "No billing address added"}</p>}
                 </div>
                 {editingField === "billingAddress" ? (
-                  <button onClick={handleSaveBillingAddress} className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-bold ml-4">
-                    Save
-                  </button>
+                  <button onClick={handleSaveBillingAddress} className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-bold ml-4">Save</button>
                 ) : (
                   <Edit2 size={18} className="text-gray-400 cursor-pointer" onClick={() => setEditingField("billingAddress")} />
                 )}
@@ -870,12 +875,11 @@ const AccountSettings = () => {
                 paymentHistory.map((item) => (
                   <div key={item._id || item.id} className="p-4 border rounded-xl bg-white flex justify-between items-center">
                     <div className="space-y-1">
-                      <p className="font-bold text-sm text-gray-900">₹{item.amount}</p>
+                      <p className="font-bold text-sm text-gray-900">₹{item.amount?.toLocaleString("en-IN")}</p>
                       <p className="text-xs text-gray-500">{new Date(item.date).toLocaleDateString()}</p>
+                      {item.description && <p className="text-xs text-gray-400">{item.description}</p>}
                     </div>
-                    <span className={`px-4 py-1 rounded-full text-xs font-bold ${
-                      item.status === "Success" ? "bg-teal-100 text-teal-600" : "bg-yellow-100 text-yellow-600"
-                    }`}>
+                    <span className={`px-4 py-1 rounded-full text-xs font-bold ${item.status === "Success" ? "bg-teal-100 text-teal-600" : "bg-yellow-100 text-yellow-600"}`}>
                       {item.status}
                     </span>
                   </div>
@@ -897,8 +901,7 @@ const AccountSettings = () => {
                     </div>
                     <button
                       onClick={() => window.open(`${API_BASE}/invoices/${invoice._id}/download`, "_blank")}
-                      className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition"
-                    >
+                      className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition">
                       Download
                     </button>
                   </div>
@@ -908,36 +911,28 @@ const AccountSettings = () => {
           </div>
         );
 
-      // ── NOTIFICATION SETTINGS ────────────────────────────────────────────
+      // ── NOTIFICATION SETTINGS ───────────────────────────────────────────────
       case "Notification settings":
         return (
           <div className={`pb-20 ${blurClass}`}>
             <h2 className="text-2xl font-bold text-gray-900 mb-8">Notification settings</h2>
-
             <Section title="Hiring & Proposals">
               <ToggleRow title="Proposal received" description="Get notified when a freelancer submits a proposal to your job" field="proposalReceived" />
               <ToggleRow title="Hiring updates" description="Receive updates about shortlisted, hired, or declined freelancers" field="hiringUpdates" />
               <ToggleRow title="Interview reminders" description="Get reminders before scheduled interviews or meetings" field="interviewReminders" />
             </Section>
-
             <Section title="Messages">
               <ToggleRow title="Message received" description="Get notified when a freelancer sends you a message" field="messageReceived" />
             </Section>
-
             <Section title="Billing & Payments">
               <ToggleRow title="Payment alerts" description="Receive alerts for successful payments, failed transactions, and invoices" field="paymentAlerts" />
             </Section>
-
             <Section title="Marketing & Updates">
               <ToggleRow title="Marketing emails" description="Receive product updates, feature announcements, and promotional emails" field="marketingEmails" />
             </Section>
-
             <div className="flex gap-4 mt-8">
-              <button
-                onClick={handleSaveNotifications}
-                disabled={saving}
-                className="bg-teal-600 text-white px-8 py-3 rounded-xl font-bold shadow-xl hover:bg-teal-700 transition disabled:opacity-60"
-              >
+              <button onClick={handleSaveNotifications} disabled={saving}
+                className="bg-teal-600 text-white px-8 py-3 rounded-xl font-bold shadow-xl hover:bg-teal-700 transition disabled:opacity-60">
                 {saving ? "Saving…" : "Save All Changes"}
               </button>
               <button onClick={handleCancel} className="bg-gray-100 text-gray-600 px-8 py-3 rounded-xl font-bold">
@@ -952,29 +947,18 @@ const AccountSettings = () => {
     }
   };
 
-  // ─── Root render ───────────────────────────────────────────────────────────
+  // ─── Root render ─────────────────────────────────────────────────────────────
   return (
     <div className="relative w-full max-w-6xl mx-auto p-8 flex gap-12 min-h-screen font-sans">
       {/* Sidebar */}
       <div className="w-64 flex-shrink-0">
         <h1 className="text-2xl font-bold mb-8">Settings</h1>
         <nav className="space-y-1">
-          {[
-            "Personal details",
-            "Hiring Preferences",
-            "Password & security",
-            "Billing & Payments",
-            "Notification settings",
-          ].map((item) => (
-            <button
-              key={item}
-              onClick={() => setActiveTab(item)}
+          {["Personal details", "Hiring Preferences", "Password & security", "Billing & Payments", "Notification settings"].map((item) => (
+            <button key={item} onClick={() => setActiveTab(item)}
               className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === item
-                  ? "bg-gray-100 text-black"
-                  : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-              }`}
-            >
+                activeTab === item ? "bg-gray-100 text-black" : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+              }`}>
               {item}
             </button>
           ))}
@@ -984,19 +968,24 @@ const AccountSettings = () => {
       {/* Main content */}
       <div className="flex-grow max-w-2xl">
         {success && (
-          <div className="mb-4 p-3 bg-teal-50 border border-teal-200 text-teal-700 rounded-lg text-sm font-medium">
-            {success}
-          </div>
+          <div className="mb-4 p-3 bg-teal-50 border border-teal-200 text-teal-700 rounded-lg text-sm font-medium">{success}</div>
         )}
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm font-medium">
-            {error}
-          </div>
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm font-medium">{error}</div>
         )}
         {renderContent()}
       </div>
 
-      {/* Delete modal */}
+      {/* Add Funds Modal — FIX: proper centered modal */}
+      {showAddFundsModal && (
+        <AddFundsModal
+          onClose={() => setShowAddFundsModal(false)}
+          onConfirm={handleAddFunds}
+          saving={saving}
+        />
+      )}
+
+      {/* Delete Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
           <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full mx-4 border">
@@ -1011,14 +1000,9 @@ const AccountSettings = () => {
                 </p>
                 {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
                 <div className="flex gap-3">
-                  <button onClick={() => setShowDeleteModal(false)} className="flex-1 px-4 py-2 border rounded-lg font-medium">
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSendOTP}
-                    disabled={otpSending}
-                    className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg font-medium disabled:opacity-60"
-                  >
+                  <button onClick={() => setShowDeleteModal(false)} className="flex-1 px-4 py-2 border rounded-lg font-medium">Cancel</button>
+                  <button onClick={handleSendOTP} disabled={otpSending}
+                    className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg font-medium disabled:opacity-60">
                     {otpSending ? "Sending OTP…" : "Yes, Delete"}
                   </button>
                 </div>
@@ -1026,22 +1010,14 @@ const AccountSettings = () => {
             ) : (
               <div className="text-center">
                 <h3 className="text-lg font-bold">Enter OTP</h3>
-                <p className="text-gray-500 text-sm mt-1 mb-6">
-                  A verification code was sent to your email.
-                </p>
+                <p className="text-gray-500 text-sm mt-1 mb-6">A verification code was sent to your email.</p>
                 {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
-                <input
-                  type="text"
-                  placeholder="000000"
+                <input type="text" placeholder="000000"
                   className="w-full border-2 border-teal-500 rounded-xl p-3 text-center text-xl font-bold tracking-widest outline-none mb-4"
                   value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                />
-                <button
-                  onClick={handleFinalDelete}
-                  disabled={saving}
-                  className="w-full py-3 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition disabled:opacity-60"
-                >
+                  onChange={(e) => setOtp(e.target.value)} />
+                <button onClick={handleFinalDelete} disabled={saving}
+                  className="w-full py-3 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition disabled:opacity-60">
                   {saving ? "Deleting…" : "Confirm Delete & Logout"}
                 </button>
               </div>

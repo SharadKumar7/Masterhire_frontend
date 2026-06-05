@@ -65,6 +65,7 @@ import YourContracts from "./pages/dashboard/client/Menu/YourContracts";
 import ClientTransactionSummary from "./pages/dashboard/client/Menu/TransactionSummary";
 import ClientProjectHistory from "./pages/dashboard/client/Menu/ProjectHistory";
 import ProposalsBids from "./pages/dashboard/client/Menu/JobBiding";
+import ClientProfile from "./pages/dashboard/client/Menu/YourProfile";
 
 /* ─────────────────── FREELANCER DASHBOARD ────────────────────── */
 import FreelancerDashboard from "./pages/dashboard/freelancer/FreelancerDashboard";
@@ -83,6 +84,7 @@ import TransactionSummary from "./pages/dashboard/freelancer/Menu/TransctionSumm
 import ContractHistory from "./pages/dashboard/freelancer/Menu/ContractHistory";
 import ProjectHistory from "./pages/dashboard/freelancer/Menu/ProjectHistory";
 import ProposalsOffers from "./pages/dashboard/freelancer/Menu/Proposal&Offers";
+import ClientAbout from "./pages/dashboard/freelancer/ClientProfile";
 
 /* ───────────────────────── SHARED PAGES ──────────────────────── */
 import ResourceHelp from "./pages/dashboard/shared/ResourceHelp";
@@ -292,6 +294,10 @@ const App = () => {
                     path="proposals-bids"
                     element={<ProposalsBids />}
                    />
+                  <Route
+                    path="profile"
+                    element={<ClientProfile />}
+                   />
                    
                 </Route>
               </Route>
@@ -354,6 +360,7 @@ const App = () => {
                     path="proposals-offers"
                     element={<ProposalsOffers />}
                    />
+                   <Route path="client-profile/:clientId" element={<ClientAbout />} />
                 </Route>
               </Route>
             </Route>

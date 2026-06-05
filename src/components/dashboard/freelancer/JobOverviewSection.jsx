@@ -201,21 +201,11 @@ const JobOverviewSection = () => {
 
                   {/* Status & Budget Bar: Always at the bottom */}
                   <div className="flex justify-between items-center text-sm mb-6 pt-4 border-t border-gray-100 mt-auto">
-                    <div
-                      className={`flex items-center text-xs font-semibold ${
-                        job.payment_verified ? "text-green-600" : "text-yellow-600"
-                      }`}
-                    >
-                      <span
-                        className={`rounded-full w-4 h-4 flex items-center justify-center text-[10px] mr-1.5 ${
-                          job.payment_verified
-                            ? "bg-green-500 text-white"
-                            : "bg-yellow-500 text-white"
-                        }`}
-                      >
-                        {job.payment_verified ? "✓" : "!"}
+                    <div className="flex items-center text-xs font-semibold text-teal-600">
+                      <span className="rounded-full w-4 h-4 flex items-center justify-center text-[10px] mr-1.5 bg-teal-500 text-white">
+                        #
                       </span>
-                      {job.payment_verified ? "Payment Verified" : "Payment Pending"}
+                      Job ID: {job.jobId}
                     </div>
                     <span className="font-bold text-gray-800 text-base">
                       ₹{job.budget}

@@ -217,6 +217,9 @@ const CustomCheckbox = ({ label, checked, onChange }) => (
 const HeartButton = ({ profileId, initialSaved = false }) => {
   const [saved, setSaved] = useState(initialSaved);
   const [loading, setLoading] = useState(false);
+  console.log("HeartButton rendered with profileId:", profileId, "initialSaved:", initialSaved);
+  console.log("profileId:", profileId);
+console.log(typeof profileId);
 
   const toggle = async (e) => {
     e.stopPropagation();

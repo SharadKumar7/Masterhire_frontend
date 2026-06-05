@@ -225,7 +225,7 @@ function MainBody() {
             />
           </div>
 
-          <ResourceCard />
+          <ResourceCard path="/client/dashboard/resourceshelp" />
         </div>
       </main>
     </div>

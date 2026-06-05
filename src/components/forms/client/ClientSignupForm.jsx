@@ -7,17 +7,23 @@ import { GoogleLogin } from "@react-oauth/google";
 const apiUrl = import.meta.env.VITE_API_URL;
 
 const validatePassword = (password) => {
-  if (!password || password.length < 8) return "Password must be at least 8 characters";
+  if (!password || password.length < 8)
+    return "Password must be at least 8 characters";
   if (!/[0-9]/.test(password)) return "Password must contain at least 1 number";
-  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) return "Password must contain at least 1 special character";
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password))
+    return "Password must contain at least 1 special character";
   return null;
 };
 
 const ClientSignupForm = () => {
   const navigate = useNavigate();
   const {
-    signupData, updateSignupData, progress,
-    startLoading, stopLoading, nextStep,
+    signupData,
+    updateSignupData,
+    progress,
+    startLoading,
+    stopLoading,
+    nextStep,
   } = useSignup();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState(signupData);
@@ -38,10 +44,11 @@ const ClientSignupForm = () => {
     const newErrors = {};
 
     if (!formData.firstName) newErrors.firstName = "First name is required";
-    if (!formData.lastName)  newErrors.lastName  = "Last name is required";
-    if (!formData.email)     newErrors.email     = "Email is required";
-    if (!formData.country || formData.country === "Select Country") newErrors.country = "Country is required";
-    if (!formData.terms)     newErrors.terms     = "You must agree to the terms";
+    if (!formData.lastName) newErrors.lastName = "Last name is required";
+    if (!formData.email) newErrors.email = "Email is required";
+    if (!formData.country || formData.country === "Select Country")
+      newErrors.country = "Country is required";
+    if (!formData.terms) newErrors.terms = "You must agree to the terms";
 
     const passwordError = validatePassword(formData.password);
     if (passwordError) newErrors.password = passwordError;
@@ -60,11 +67,11 @@ const ClientSignupForm = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           firstName: formData.firstName,
-          lastName:  formData.lastName,
-          country:   formData.country,
-          email:     formData.email,
-          password:  formData.password,
-          role:      formData.role,
+          lastName: formData.lastName,
+          country: formData.country,
+          email: formData.email,
+          password: formData.password,
+          role: formData.role,
         }),
       });
 
@@ -116,18 +123,34 @@ const ClientSignupForm = () => {
               onSuccess={async (credentialResponse) => {
                 startLoading();
                 try {
-                  const response = await fetch(`${apiUrl}/api/auth/google-auth`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      credential: credentialResponse.credential,
-                      role: "client",
-                    }),
-                  });
+                  const response = await fetch(
+                    `${apiUrl}/api/auth/google-auth`,
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        credential: credentialResponse.credential,
+                        role: "client",
+                      }),
+                    },
+                  );
                   const data = await response.json();
-                  if (!response.ok) { alert(data.message || "Google signup failed"); return; }
+                  if (!response.ok) {
+                    alert(data.message || "Google signup failed");
+                    return;
+                  }
                   localStorage.setItem("token", data.token);
-                  navigate("/signup/client/welcome");
+                  localStorage.setItem("user", JSON.stringify(data.user));
+
+                  if (data.user.role !== "client") {
+                    alert(
+                      "This account is registered as a Freelancer. Please use the Freelancer section.",
+                    );
+                    return;
+                  }
+
+                  navigate("/client/dashboard");
+                  
                 } catch (error) {
                   console.error("GOOGLE AUTH ERROR:", error);
                   alert("Server is unavailable");
@@ -147,25 +170,63 @@ const ClientSignupForm = () => {
             <form className="space-y-6" onSubmit={handleNext}>
               <div className="flex gap-4">
                 <div className="w-1/2">
-                  <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">First name</label>
-                  <input type="text" id="firstName" value={formData.firstName} onChange={handleInputChange} className={getBorderClass("firstName")} />
+                  <label
+                    htmlFor="firstName"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    First name
+                  </label>
+                  <input
+                    type="text"
+                    id="firstName"
+                    value={formData.firstName}
+                    onChange={handleInputChange}
+                    className={getBorderClass("firstName")}
+                  />
                   <ErrorText fieldName="firstName" />
                 </div>
                 <div className="w-1/2">
-                  <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">Last name</label>
-                  <input type="text" id="lastName" value={formData.lastName} onChange={handleInputChange} className={getBorderClass("lastName")} />
+                  <label
+                    htmlFor="lastName"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    Last name
+                  </label>
+                  <input
+                    type="text"
+                    id="lastName"
+                    value={formData.lastName}
+                    onChange={handleInputChange}
+                    className={getBorderClass("lastName")}
+                  />
                   <ErrorText fieldName="lastName" />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Business email address</label>
-                <input type="email" id="email" value={formData.email} onChange={handleInputChange} className={getBorderClass("email")} />
+                <label
+                  htmlFor="email"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Business email address
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  className={getBorderClass("email")}
+                />
                 <ErrorText fieldName="email" />
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <label
+                  htmlFor="password"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Password
+                </label>
                 <div className="relative">
                   <input
                     type={showPassword ? "text" : "password"}
@@ -175,18 +236,34 @@ const ClientSignupForm = () => {
                     placeholder="Min 8 chars, 1 number, 1 special char"
                     className={getBorderClass("password")}
                   />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400">
-                    {showPassword ? <Eye className="h-5 w-5" /> : <EyeOff className="h-5 w-5" />}
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400"
+                  >
+                    {showPassword ? (
+                      <Eye className="h-5 w-5" />
+                    ) : (
+                      <EyeOff className="h-5 w-5" />
+                    )}
                   </button>
                 </div>
                 <ErrorText fieldName="password" />
               </div>
 
               <div>
-                <label htmlFor="country" className="block text-sm font-medium text-gray-700 mb-1">Country</label>
-                <select id="country" value={formData.country} onChange={handleInputChange}
-                  className={`${getBorderClass("country")} bg-white appearance-none`}>
+                <label
+                  htmlFor="country"
+                  className="block text-sm font-medium text-gray-700 mb-1"
+                >
+                  Country
+                </label>
+                <select
+                  id="country"
+                  value={formData.country}
+                  onChange={handleInputChange}
+                  className={`${getBorderClass("country")} bg-white appearance-none`}
+                >
                   <option>Select Country</option>
                   <option value="India">India</option>
                 </select>
@@ -195,26 +272,44 @@ const ClientSignupForm = () => {
 
               <div className="flex flex-col">
                 <div className="flex items-start">
-                  <input type="checkbox" id="terms" checked={formData.terms} onChange={handleInputChange}
-                    className="h-4 w-4 text-teal-600 border-gray-300 rounded mt-1" />
-                  <label htmlFor="terms" className="ml-2 block text-sm text-gray-900">
+                  <input
+                    type="checkbox"
+                    id="terms"
+                    checked={formData.terms}
+                    onChange={handleInputChange}
+                    className="h-4 w-4 text-teal-600 border-gray-300 rounded mt-1"
+                  />
+                  <label
+                    htmlFor="terms"
+                    className="ml-2 block text-sm text-gray-900"
+                  >
                     Yes, I agree to the MasterHire{" "}
-                    <Link to="/about" className="text-teal-600">Terms</Link>{" "}and{" "}
-                    <Link to="/about" className="text-teal-600">Privacy</Link>.
+                    <Link to="/about" className="text-teal-600">
+                      Terms
+                    </Link>{" "}
+                    and{" "}
+                    <Link to="/about" className="text-teal-600">
+                      Privacy
+                    </Link>
+                    .
                   </label>
                 </div>
                 <ErrorText fieldName="terms" />
               </div>
 
-              <button type="submit"
-                className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition">
+              <button
+                type="submit"
+                className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 px-4 rounded-lg shadow-md transition"
+              >
                 Create Account
               </button>
             </form>
 
             <div className="mt-6 text-center text-gray-600">
               Already have an account?{" "}
-              <Link to="/login" className="text-teal-600 font-semibold">Log In</Link>
+              <Link to="/login" className="text-teal-600 font-semibold">
+                Log In
+              </Link>
             </div>
           </main>
         </div>

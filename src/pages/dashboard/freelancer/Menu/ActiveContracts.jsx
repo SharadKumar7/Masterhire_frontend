@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { MoreVertical } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import  formatTimeAgo  from "../../../../components/dashboard/formatTimeAgo";
 const apiUrl = import.meta.env.VITE_API_URL;
 
 const ActiveContractsPage = () => {
@@ -15,7 +16,7 @@ const ActiveContractsPage = () => {
       try {
         const token = localStorage.getItem("token");
         const response = await fetch(
-          `${apiUrl}/api/freelancer/current-job`,
+          `${apiUrl}/api/jobs/freelancer/current-job`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -74,23 +75,23 @@ const ActiveContractsPage = () => {
         {appliedJobs.length > 0 ? (
           appliedJobs.map((job) => (
             <div
-              key={job.id}
-              onClick={() => navigate(`/freelancer/dashboard/workspace/${job.id}`)}
+              key={job._id}
+              onClick={() => navigate(`/freelancer/dashboard/workspace/${job._id}`)}
               className="group relative bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer"
             >
               {/* 3-Dot Menu */}
               <div className="absolute top-6 right-6">
                 <button
-                  onClick={(e) => handleMenuClick(e, job.id)}
+                  onClick={(e) => handleMenuClick(e, job._id)}
                   className="p-1 hover:bg-gray-100 rounded-full transition-colors text-gray-400"
                 >
                   <MoreVertical size={20} />
                 </button>
-                
-                {openMenuId === job.id && (
-                  <div 
+
+                {openMenuId === job._id && (
+                  <div
                     className="absolute right-0 top-full mt-2 w-48 bg-white border border-gray-100 shadow-xl rounded-xl z-10 py-2 animate-in fade-in zoom-in duration-100"
-                    onClick={(e) => handleGoToWorkspace(e, job.id)}
+                    onClick={(e) => handleGoToWorkspace(e, job._id)}
                   >
                     <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-teal-50 hover:text-teal-600 font-medium">
                       Go to workspace
@@ -101,7 +102,7 @@ const ActiveContractsPage = () => {
 
               {/* Job Content */}
               <p className="text-[10px] text-gray-400 mb-1 font-bold">
-                Posted {job.postedTime || "5 hours ago"}
+                Posted {formatTimeAgo(job.postedTime) || "Unknown time"}
               </p>
               <h2 className="text-lg font-bold text-gray-900 mb-2 pr-12 group-hover:text-teal-700 transition-colors">
                 {job.title}

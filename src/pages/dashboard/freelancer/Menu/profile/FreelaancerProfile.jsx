@@ -9,7 +9,13 @@ import {
 const apiUrl = import.meta.env.VITE_API_URL;
 const API_BASE = `${apiUrl}/api`;
 
-// ─── Section Card wrapper ─────────────────────────────────────────────────────
+// ─── Auth header helper ───────────────────────────────────────────────────────
+const authHeaders = () => ({
+  "Content-Type": "application/json",
+  Authorization: `Bearer ${localStorage.getItem("token")}`,
+});
+
+// ─── Section Card ─────────────────────────────────────────────────────────────
 const SectionCard = ({ title, onEdit, children }) => (
   <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
     <div className="flex items-center justify-between mb-4">
@@ -25,7 +31,7 @@ const SectionCard = ({ title, onEdit, children }) => (
   </div>
 );
 
-// ─── Work History Tabs (read-only) ────────────────────────────────────────────
+// ─── Work History Tabs ────────────────────────────────────────────────────────
 const WorkHistoryTabs = ({ completed = [], inProgress = [] }) => {
   const [tab, setTab] = useState("completed");
   const items = tab === "completed" ? completed : inProgress;
@@ -62,7 +68,7 @@ const WorkHistoryTabs = ({ completed = [], inProgress = [] }) => {
   );
 };
 
-// ─── Skill Tag (read-only display) ───────────────────────────────────────────
+// ─── Skill Tag ────────────────────────────────────────────────────────────────
 const SkillTag = ({ skill }) => (
   <span className="inline-flex items-center px-3 py-1 bg-teal-50 border border-teal-100 text-teal-700 text-xs font-semibold rounded-full">
     {skill}
@@ -71,52 +77,24 @@ const SkillTag = ({ skill }) => (
 
 // ─── Main Profile ─────────────────────────────────────────────────────────────
 const FreelancerProfile = () => {
-  const [profile, setProfile]       = useState(null);
-  const [loading, setLoading]       = useState(true);
-
-  // Modal open state — which modal is open
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving]   = useState(false);
   const [openModal, setOpenModal] = useState(null);
-
   const fileInputRef = useRef(null);
 
-  // ── Fetch ─────────────────────────────────────────────────────────────────
+  // ── Fetch ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const res = await fetch(`${API_BASE}/profile`);
+        const res = await fetch(`${API_BASE}/my-profile`, {
+          headers: authHeaders(),
+        });
         if (!res.ok) throw new Error("Failed");
         const data = await res.json();
         setProfile(data);
-      } catch {
-        setProfile({
-          id: 1,
-          avatar: null,
-          name: "Bijoy Pantu",
-          verified: true,
-          location: "Howrah, West Bengal",
-          title: "Laravel Expert | PHP Expert | Shopify Expert | Backend Developer | React.js, Node.js",
-          bio: "Results-oriented Data Analyst skilled in statistical analysis, data visualization, and SQL, passionate about turning raw data into actionable insights to support decision-making.",
-          totalJobs: 34,
-          totalEarnings: "₹12K+",
-          jobSuccess: "95%",
-          languages: [
-            { lang: "English", level: "Fluent" },
-            { lang: "Bengali", level: "Native/Bilingual" },
-            { lang: "Hindi",   level: "Conversational" },
-          ],
-          education: [
-            { institution: "Budge Budge Institute of Technology", degree: "Bachelor's Degree", field: "Computer Science", year: "2022–2026", description: "" },
-          ],
-          skills: ["Wordpress", "Node.js", "Laravel", "MongoDB", "React.js", "PostgreSQL"],
-          workHistory: { completed: [], inProgress: [] },
-          workExperience: [
-            { title: "Senior Data Analyst", company: "Virginia Commonwealth University", startDate: "July 2015", endDate: "", current: true, description: "Use of insurance claim files to create markers of disease and health services." },
-          ],
-          certifications: [
-            { name: "Google Data Analytics", issuer: "Coursera", issueDate: "Jun 2025", expiryDate: "", noExpiry: true, credentialUrl: "" },
-          ],
-          otherExperiences: [],
-        });
+      } catch (err) {
+        console.error("Profile fetch failed:", err);
       } finally {
         setLoading(false);
       }
@@ -124,29 +102,46 @@ const FreelancerProfile = () => {
     fetchProfile();
   }, []);
 
-  // ── Update helper ─────────────────────────────────────────────────────────
-  const update = (patch) => setProfile(prev => ({ ...prev, ...patch }));
-
-  // ── Modal save — direct API call per section ──────────────────────────────
-  const handleModalSave = async (patch) => {
-    update(patch);
+  // ── Save to backend ────────────────────────────────────────────────────────
+  const saveToBackend = async (patch) => {
+    setSaving(true);
     try {
-      await fetch(`${API_BASE}/profile/${profile?.id}`, {
+      const res = await fetch(`${API_BASE}/my-profile`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...profile, ...patch }),
+        headers: authHeaders(),
+        body: JSON.stringify(patch),
       });
+      if (!res.ok) throw new Error("Save failed");
     } catch (err) {
-      console.error("Save failed:", err);
+      console.error("Save error:", err);
+    } finally {
+      setSaving(false);
     }
   };
 
-  // ── Avatar ────────────────────────────────────────────────────────────────
+  // ── Modal save ─────────────────────────────────────────────────────────────
+  const handleModalSave = async (patch) => {
+    setProfile(prev => ({ ...prev, ...patch }));
+    await saveToBackend(patch);
+  };
+
+  // ── Avatar change ──────────────────────────────────────────────────────────
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    // Max 2MB check
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Image size should be less than 2MB");
+      return;
+    }
+
     const reader = new FileReader();
-    reader.onloadend = () => update({ avatar: reader.result });
+    reader.onloadend = async () => {
+      const base64 = reader.result;
+      setProfile(prev => ({ ...prev, avatar: base64 }));
+      await saveToBackend({ avatar: base64 });
+    };
     reader.readAsDataURL(file);
   };
 
@@ -156,18 +151,32 @@ const FreelancerProfile = () => {
     </div>
   );
 
+  if (!profile) return (
+    <div className="flex items-center justify-center min-h-screen bg-slate-50">
+      <p className="text-slate-500 text-sm">Failed to load profile.</p>
+    </div>
+  );
+
   return (
     <div className="bg-slate-50 min-h-screen font-sans">
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 
-        {/* ── TOP CARD ────────────────────────────────────────────────── */}
+        {/* Saving indicator */}
+        {saving && (
+          <div className="fixed top-4 right-4 z-50 bg-teal-600 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-lg flex items-center gap-2">
+            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            Saving...
+          </div>
+        )}
+
+        {/* ── TOP CARD ──────────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
           <div className="flex gap-6">
             {/* Avatar */}
             <div className="relative flex-shrink-0 group">
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="w-28 h-28 rounded-full overflow-hidden bg-slate-100 cursor-pointer border-2 border-slate-100 hover:border-teal-400 transition-all"
+                className="w-28 h-28 rounded-full overflow-hidden bg-slate-100 cursor-pointer border-2 border-slate-100 hover:border-teal-400 transition-all relative"
               >
                 {profile.avatar ? (
                   <img src={profile.avatar} alt="avatar" className="w-full h-full object-cover" />
@@ -187,8 +196,12 @@ const FreelancerProfile = () => {
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  <p className="text-base font-black text-slate-900 leading-snug line-clamp-2">{profile.title}</p>
-                  <p className="text-sm text-slate-500 mt-2 leading-relaxed line-clamp-3">{profile.bio}</p>
+                  <p className="text-base font-black text-slate-900 leading-snug line-clamp-2">
+                    {profile.title || "Add your professional title"}
+                  </p>
+                  <p className="text-sm text-slate-500 mt-2 leading-relaxed line-clamp-3">
+                    {profile.bio || "Add a short bio about yourself"}
+                  </p>
                 </div>
                 <button
                   onClick={() => setOpenModal("titleBio")}
@@ -200,7 +213,7 @@ const FreelancerProfile = () => {
             </div>
           </div>
 
-          {/* Name + Location + Stats — read only */}
+          {/* Name + Location + Stats */}
           <div className="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-4 border-t border-slate-100">
             <div>
               <div className="flex items-center gap-1.5">
@@ -211,9 +224,9 @@ const FreelancerProfile = () => {
             </div>
             <div className="flex gap-8">
               {[
-                { label: "Total jobs",     value: profile.totalJobs    },
-                { label: "Total earnings", value: profile.totalEarnings },
-                { label: "Job success",    value: profile.jobSuccess    },
+                { label: "Total jobs",     value: profile.totalJobs     },
+                { label: "Total earnings", value: profile.totalEarnings  },
+                { label: "Job success",    value: profile.jobSuccess     },
               ].map(({ label, value }) => (
                 <div key={label} className="text-center">
                   <p className="text-xl font-black text-slate-900">{value}</p>
@@ -224,22 +237,24 @@ const FreelancerProfile = () => {
           </div>
         </div>
 
-        {/* ── LANGUAGES + SKILLS + EDUCATION ──────────────────────────── */}
+        {/* ── LANGUAGES + SKILLS + EDUCATION ────────────────────────── */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-          {/* Left col: Languages + Education */}
           <div className="space-y-5">
-
             {/* Languages */}
             <SectionCard title="Languages" onEdit={() => setOpenModal("languages")}>
-              <div className="space-y-2">
-                {profile.languages?.map((l, i) => (
-                  <div key={i} className="flex items-center justify-between text-sm">
-                    <span className="font-semibold text-slate-800">{l.lang}</span>
-                    <span className="text-xs text-slate-500 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-full">{l.level}</span>
-                  </div>
-                ))}
-              </div>
+              {profile.languages?.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-3">No languages added</p>
+              ) : (
+                <div className="space-y-2">
+                  {profile.languages?.map((l, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm">
+                      <span className="font-semibold text-slate-800">{l.lang}</span>
+                      <span className="text-xs text-slate-500 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-full">{l.level}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </SectionCard>
 
             {/* Education */}
@@ -248,7 +263,7 @@ const FreelancerProfile = () => {
                 <p className="text-sm text-slate-400 text-center py-3">No education added</p>
               ) : (
                 <div className="space-y-3">
-                  {profile.education.map((e, i) => (
+                  {profile.education?.map((e, i) => (
                     <div key={i} className={`pb-3 ${i !== profile.education.length - 1 ? "border-b border-slate-100" : ""}`}>
                       <p className="text-xs font-black text-slate-900">{e.institution}</p>
                       <p className="text-xs text-slate-600 mt-0.5">{e.degree}{e.field ? ` · ${e.field}` : ""}</p>
@@ -260,21 +275,19 @@ const FreelancerProfile = () => {
             </SectionCard>
           </div>
 
-          {/* Right 2 cols: Skills + Work History */}
           <div className="md:col-span-2 space-y-5">
-
             {/* Skills */}
             <SectionCard title="Skills" onEdit={() => setOpenModal("skills")}>
               {profile.skills?.length === 0 ? (
                 <p className="text-sm text-slate-400">No skills added</p>
               ) : (
                 <div className="flex flex-wrap gap-2">
-                  {profile.skills.map(s => <SkillTag key={s} skill={s} />)}
+                  {profile.skills?.map(s => <SkillTag key={s} skill={s} />)}
                 </div>
               )}
             </SectionCard>
 
-            {/* Work History — read only */}
+            {/* Work History */}
             <SectionCard title="Work History">
               <WorkHistoryTabs
                 completed={profile.workHistory?.completed || []}
@@ -284,13 +297,13 @@ const FreelancerProfile = () => {
           </div>
         </div>
 
-        {/* ── WORK EXPERIENCE ─────────────────────────────────────────── */}
+        {/* ── WORK EXPERIENCE ───────────────────────────────────────── */}
         <SectionCard title="Work Experience" onEdit={() => setOpenModal("experience")}>
           {profile.workExperience?.length === 0 ? (
             <p className="text-sm text-slate-400 text-center py-4">No work experience added</p>
           ) : (
             <div className="space-y-5">
-              {profile.workExperience.map((exp, i) => (
+              {profile.workExperience?.map((exp, i) => (
                 <div key={i} className={`pb-5 ${i !== profile.workExperience.length - 1 ? "border-b border-slate-100" : ""}`}>
                   <div className="flex items-start gap-1 flex-wrap">
                     <span className="font-black text-slate-900 text-sm">{exp.title}</span>
@@ -309,13 +322,13 @@ const FreelancerProfile = () => {
           )}
         </SectionCard>
 
-        {/* ── CERTIFICATIONS ──────────────────────────────────────────── */}
+        {/* ── CERTIFICATIONS ────────────────────────────────────────── */}
         <SectionCard title="Certifications" onEdit={() => setOpenModal("certifications")}>
           {profile.certifications?.length === 0 ? (
             <p className="text-sm text-slate-400 text-center py-4">No certifications added</p>
           ) : (
             <div className="space-y-4">
-              {profile.certifications.map((c, i) => (
+              {profile.certifications?.map((c, i) => (
                 <div key={i} className={`pb-4 ${i !== profile.certifications.length - 1 ? "border-b border-slate-100" : ""}`}>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-black text-slate-900 text-sm">{c.name}</span>
@@ -337,13 +350,13 @@ const FreelancerProfile = () => {
           )}
         </SectionCard>
 
-        {/* ── OTHER EXPERIENCES ───────────────────────────────────────── */}
+        {/* ── OTHER EXPERIENCES ─────────────────────────────────────── */}
         <SectionCard title="Other Experiences" onEdit={() => setOpenModal("other")}>
           {profile.otherExperiences?.length === 0 ? (
             <p className="text-sm text-slate-400 text-center py-4">Add volunteer work, hackathons, awards and more</p>
           ) : (
             <div className="space-y-4">
-              {profile.otherExperiences.map((e, i) => {
+              {profile.otherExperiences?.map((e, i) => {
                 const TYPE_COLORS = {
                   "Volunteer":         "bg-emerald-50 text-emerald-700 border-emerald-200",
                   "Freelance Project": "bg-teal-50 text-teal-700 border-teal-200",
@@ -375,7 +388,7 @@ const FreelancerProfile = () => {
 
       </div>
 
-      {/* ── MODALS ──────────────────────────────────────────────────────── */}
+      {/* ── MODALS ────────────────────────────────────────────────────── */}
       {openModal === "titleBio" && (
         <TitleBioModal profile={profile} onClose={() => setOpenModal(null)} onSave={handleModalSave} />
       )}
@@ -397,8 +410,6 @@ const FreelancerProfile = () => {
       {openModal === "other" && (
         <OtherExperiencesModal profile={profile} onClose={() => setOpenModal(null)} onSave={handleModalSave} />
       )}
-
-
     </div>
   );
 };

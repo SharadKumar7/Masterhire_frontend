@@ -114,10 +114,18 @@ const JobDetailsTab = ({ job, isApplied, isRejected, isSaved, onApply, onSave, b
   return (
     <div className="space-y-10">
       <div>
-        <p className="text-xs text-gray-400 font-medium mb-5">
+        <div className="flex items-center justify-between gap-4 mb-2">
+          <p className="text-xs text-gray-400 font-medium mb-5">
           Posted {formatTimeAgo(job.postedTime)}
         </p>
-        <h1 className="text-2xl font-bold text-gray-800 leading-tight mb-1">{job.title}</h1>
+
+          <span className="shrink-0 text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full tracking-wide">
+            JOB ID: {job.jobId}
+          </span>
+        </div>
+        <h1 className="flex-1 text-2xl font-bold text-gray-800 leading-tight truncate">
+            {job.title}
+          </h1>
       </div>
 
       <section>

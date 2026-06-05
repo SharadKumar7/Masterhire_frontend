@@ -171,7 +171,7 @@ const FreelancerDetailsSection = ({ data, loading, error, onOpenChat }) => {
               {/* Buttons */}
               <div className="space-y-3 mt-8">
                 <button
-                  onClick={() => navigate(`/client/${client._id}`)}
+                  onClick={() => navigate(`/freelancer/dashboard/client-profile/${client._id}`)}
                   className="w-full bg-teal-700 hover:bg-teal-800 text-white font-bold py-3 rounded-xl text-sm flex items-center justify-between px-4 transition"
                 >
                   <span className="flex-1 text-center">View full profile</span>

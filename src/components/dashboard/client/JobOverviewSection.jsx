@@ -230,7 +230,8 @@ const JobOverviewSection = () => {
                         );
                       } else {
                         navigate(
-                          `/client/dashboard/project-editjob/${job._id}`
+                          `/client/dashboard/project-editjob/${job._id}`,
+                          { state: { source: "draft" } }
                         );
                       }
                     }}
