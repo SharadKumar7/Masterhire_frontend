@@ -5,43 +5,100 @@ import { GoogleLogin } from "@react-oauth/google";
 import Loader from "../../components/common/Loader";
 import { useSignup } from "../../context/SignupContext";
 import { useAuth } from "../../context/AuthContext";
+
 const apiUrl = import.meta.env.VITE_API_URL;
 
 const MasterHireLoginPage = () => {
-  
   const navigate = useNavigate();
-  const { progress, startLoading, stopLoading , nextStep } = useSignup();
+  const { progress, startLoading, stopLoading, nextStep } = useSignup();
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
-  const { login } = useAuth();
+  const { login, setUser, setToken } = useAuth();
 
-  // ── Email/Password Login ────────────────────────────────────────────────────
+  // ── helper: navigate based on role & profile ──────────────────────────────
+  const handleRedirect = (role, isProfileComplete) => {
+    if (role === "freelancer") {
+      if (isProfileComplete) {
+        navigate("/freelancer/dashboard");
+      } else {
+        alert(
+          "Please complete your freelancer profile details first and then log in again."
+        );
+        nextStep();
+        nextStep();
+        nextStep();
+        navigate("/signup/freelancer/details");
+      }
+    } else {
+      navigate("/client/dashboard");
+    }
+  };
+
+  // ── Email/Password Login ───────────────────────────────────────────────────
   const handleLogin = async (e) => {
     e.preventDefault();
-
     setError("");
     startLoading();
 
     try {
       const res = await login(formData.email, formData.password);
 
+      console.log("LOGIN RESPONSE:", res);
+
       if (res.success) {
-        res.role === "freelancer"
-          ? navigate("/freelancer/dashboard")
-          : navigate("/client/dashboard");
+        handleRedirect(res.role, res.isProfileComplete);
       } else {
-        setError(res.message);
+        setError(res.message || "Invalid email or password");
       }
     } catch (err) {
       console.error("LOGIN ERROR:", err);
-
       setError(err.message || "Server is unavailable");
     } finally {
       stopLoading();
     }
   };
 
+  // ── Google Login ───────────────────────────────────────────────────────────
+  const handleGoogleSuccess = async (credentialResponse) => {
+    try {
+      startLoading();
+
+      const res = await fetch(`${apiUrl}/api/auth/google-auth`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credential: credentialResponse.credential }),
+      });
+
+      const data = await res.json();
+
+
+      if (!res.ok) {
+        setError(data.message || "Google login failed");
+        return;
+      }
+
+      // ✅ sync with AuthContext instead of raw localStorage
+      localStorage.setItem("token", data.token);
+      setToken(data.token);
+      setUser({
+        role: data.user.role,
+        userId: data.user.userId,
+        fullName: data.user.fullName,
+        isProfileComplete: data.user.isProfileComplete,
+      });
+
+
+      handleRedirect(data.user.role, data.user.isProfileComplete);
+    } catch (err) {
+      console.error("GOOGLE LOGIN ERROR:", err);
+      setError("Google login failed. Please try again.");
+    } finally {
+      stopLoading();
+    }
+  };
+
+  // ──────────────────────────────────────────────────────────────────────────
   return (
     <>
       <Loader progress={progress} />
@@ -83,7 +140,7 @@ const MasterHireLoginPage = () => {
               <input
                 type={showPassword ? "text" : "password"}
                 placeholder="Password"
-                className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                className="w-full pl-12 pr-12 py-3 border border-gray-300 rounded-lg outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
                 value={formData.password}
                 onChange={(e) =>
                   setFormData({ ...formData, password: e.target.value })
@@ -116,7 +173,7 @@ const MasterHireLoginPage = () => {
               to="/forgetpassword"
               className="text-teal-600 hover:text-teal-700"
             >
-              Forget Password?
+              Forgot Password?
             </Link>
           </div>
 
@@ -126,51 +183,9 @@ const MasterHireLoginPage = () => {
             <div className="flex-grow border-t border-gray-300"></div>
           </div>
 
-          {/* ✅ Real Google Login — role backend se aayega */}
           <GoogleLogin
-            onSuccess={async (credentialResponse) => {
-              try {
-                startLoading();
-                const res = await fetch(`${apiUrl}/api/auth/google-auth`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    credential: credentialResponse.credential,
-                  }),
-                });
-                const data = await res.json();
-                if (!res.ok) {
-                  stopLoading();
-                  setError(data.message || "Google login failed");
-                  return;
-                }
-                localStorage.setItem("token", data.token);
-                localStorage.setItem("user", JSON.stringify(data.user));
-
-                console.log("GOOGLE LOGIN SUCCESS:", data);
-                stopLoading();
-
-                if (data.user.role === "freelancer") {
-                  if (data.user.isProfileComplete) {
-                    navigate("/freelancer/dashboard");
-                  } else {
-                    alert(
-                      "Please complete your freelancer profile details first and then log in again."
-                    );
-                    nextStep();
-                    nextStep();
-                    nextStep(); // Move to the next step in the signup process
-                    navigate("/signup/freelancer/details");
-                  }
-                } else {
-                  navigate("/client/dashboard");
-                }
-              } catch (err) {
-                stopLoading();
-                setError("Google login failed");
-              }
-            }}
-            onError={() => setError("Google Login Failed")}
+            onSuccess={handleGoogleSuccess}
+            onError={() => setError("Google Login Failed. Please try again.")}
           />
 
           <div className="mt-4 text-center text-gray-600">

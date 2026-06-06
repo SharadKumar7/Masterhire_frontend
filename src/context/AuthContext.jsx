@@ -18,6 +18,8 @@ export const AuthProvider = ({ children }) => {
         return;
       }
 
+
+      
       try {
         const res = await fetch(`${BASE_URL}/me`, {
           headers: {
@@ -46,31 +48,34 @@ export const AuthProvider = ({ children }) => {
   }, [token]);
 
   // 🔐 LOGIN
-  const login = async (email, password) => {
-    const res = await fetch(`${BASE_URL}/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
+  // 🔐 LOGIN
+const login = async (email, password) => {
+  const res = await fetch(`${BASE_URL}/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = await res.json();
 
-    const data = await res.json();
+  if (!res.ok) {
+    return { success: false, message: data.message };
+  }
 
-    if (!res.ok) {
-      return { success: false, message: data.message };
-    }
+  localStorage.setItem("token", data.token);
+  setToken(data.token);
+  setUser({
+    role: data.role,
+    userId: data.userId,
+    fullName: data.fullName,
+    isProfileComplete: data.isProfileComplete, // ✅ add this
+  });
 
-    localStorage.setItem("token", data.token);
-    setToken(data.token);
-
-    setUser({
-      role: data.role,
-      userId: data.userId,
-      fullName: data.fullName,
-    });
-
-    return { success: true, role: data.role };
+  return {
+    success: true,
+    role: data.role,
+    isProfileComplete: data.isProfileComplete, // ✅ add this
   };
-
+};
   // 🚪 LOGOUT
   const logout = () => {
     localStorage.removeItem("token");
@@ -79,7 +84,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout }}>
+    <AuthContext.Provider value={{ user, token, login, logout, setUser, setToken }}>
       {!loading && children}
     </AuthContext.Provider>
   );

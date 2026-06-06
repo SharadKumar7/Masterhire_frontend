@@ -8,7 +8,20 @@ import {
 } from 'lucide-react';
 
 const BASE_URL = import.meta.env.VITE_API_URL;
+const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY_ID;
 const getToken = () => localStorage.getItem("token");
+
+// ─── Load Razorpay Script ─────────────────────────────────────────────────────
+const loadRazorpayScript = () =>
+  new Promise((resolve) => {
+    if (document.getElementById("razorpay-script")) return resolve(true);
+    const script = document.createElement("script");
+    script.id = "razorpay-script";
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
 
 const DATE_RANGES = [
   'May 01 - May 31, 2024',
@@ -35,6 +48,80 @@ const ICON_MAP = {
   wallet: Wallet, creditCard: CreditCard, clock: Clock, lock: Lock,
   arrowUp: ArrowUpCircle, arrowDown: ArrowDownCircle, percent: Percent,
   refresh: RefreshCw, checkCircle: CheckCircle, bank: Building2,
+};
+
+// ─── Build metrics from wallet + transactions ─────────────────────────────────
+const buildMetrics = (wallet, transactions) => {
+  const totalSpent    = wallet?.totalSpent    || 0;
+  const escrowHeld    = wallet?.escrowHeld    || 0;
+  const totalReleased = wallet?.totalReleased || 0;
+  const balance       = wallet?.balance       || 0;
+  const platformFees  = wallet?.platformFeesPaid || 0;
+
+  const refunds = transactions
+    .filter(t => t.type === 'Refund Received')
+    .reduce((s, t) => s + t.amount, 0);
+
+  return [
+    { id: 1, label: 'Wallet Balance',   value: balance,       subLabel: 'Available to spend',    subType: 'positive', icon: 'wallet',     color: 'teal'  },
+    { id: 2, label: 'Total Spent',      value: totalSpent,    subLabel: 'All time payments',      subType: 'negative', icon: 'creditCard', color: 'blue'  },
+    { id: 3, label: 'In Escrow',        value: escrowHeld,    subLabel: 'Held for milestones',    subType: 'warning',  icon: 'lock',       color: 'amber' },
+    { id: 4, label: 'Released',         value: totalReleased, subLabel: 'Paid to freelancers',    subType: 'positive', icon: 'arrowUp',    color: 'teal'  },
+    { id: 5, label: 'Platform Fees',    value: platformFees,  subLabel: '10% per milestone',      subType: 'neutral',  icon: 'percent',    color: 'cyan'  },
+    { id: 6, label: 'Refunds',          value: refunds,       subLabel: 'Returned to wallet',     subType: 'positive', icon: 'refresh',    color: 'rose'  },
+  ];
+};
+
+// ─── Build chart data from transactions ──────────────────────────────────────
+const buildChartData = (transactions, monthOffset = 0) => {
+  const now   = new Date();
+  const year  = now.getFullYear();
+  const month = now.getMonth() - monthOffset;
+  const days  = new Date(year, month + 1, 0).getDate();
+
+  // Group spending by day
+  const dayMap = {};
+  transactions
+    .filter(t => {
+      if (t.isCredit) return false; // only outgoing
+      const d = new Date(t.dateValue || t.createdAt);
+      return d.getMonth() === ((month + 12) % 12) && d.getFullYear() === year;
+    })
+    .forEach(t => {
+      const day = new Date(t.dateValue || t.createdAt).getDate();
+      dayMap[day] = (dayMap[day] || 0) + t.amount;
+    });
+
+  // Return every 5th day as a point
+  return Array.from({ length: Math.ceil(days / 5) }, (_, i) => {
+    const day = (i + 1) * 5;
+    return {
+      label: `${day} ${now.toLocaleString('en-IN', { month: 'short' })}`,
+      value: dayMap[day] || 0,
+    };
+  });
+};
+
+// ─── Build donut breakdown ────────────────────────────────────────────────────
+const buildBreakdown = (transactions) => {
+  const groups = {
+    'Escrow Deposit': { label: 'Escrow Deposits', color: '#3b82f6', value: 0 },
+    'Milestone Release': { label: 'Milestone Releases', color: '#0d9488', value: 0 },
+    'Wallet Top-up': { label: 'Wallet Top-ups', color: '#8b5cf6', value: 0 },
+    'Refund Received': { label: 'Refunds', color: '#f43f5e', value: 0 },
+  };
+
+  transactions.forEach(t => {
+    if (groups[t.type]) groups[t.type].value += t.amount;
+  });
+
+  const total = Object.values(groups).reduce((s, g) => s + g.value, 0);
+  return {
+    breakdown: Object.values(groups)
+      .filter(g => g.value > 0)
+      .map(g => ({ ...g, pct: total > 0 ? Math.round((g.value / total) * 100) : 0 })),
+    total,
+  };
 };
 
 // ─── Metric Card ──────────────────────────────────────────────────────────────
@@ -270,34 +357,89 @@ function DateRangePicker({ value, onChange }) {
   );
 }
 
-// ─── Add Funds Modal ──────────────────────────────────────────────────────────
+// ─── Add Funds Modal — Razorpay integrated ────────────────────────────────────
 function AddFundsModal({ onClose, onSuccess }) {
-  const [amount, setAmount]         = useState('');
-  const [method, setMethod]         = useState('upi');
+  const [amount,     setAmount]     = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted]   = useState(false);
-  const [error, setError]           = useState('');
+  const [submitted,  setSubmitted]  = useState(false);
+  const [error,      setError]      = useState('');
 
   const handleSubmit = async () => {
-    if (!amount || Number(amount) <= 0) return;
+    const amt = Number(amount);
+    if (!amt || amt < 1) {
+      setError('Please enter a valid amount (min ₹1)');
+      return;
+    }
+
     setSubmitting(true);
     setError('');
+
+    // Load Razorpay script
+    const loaded = await loadRazorpayScript();
+    if (!loaded) {
+      setError('Failed to load payment gateway. Check your internet.');
+      setSubmitting(false);
+      return;
+    }
+
     try {
-      const res = await fetch(`${BASE_URL}/api/client/add-funds`, {
+      // Step 1 — Create top-up order
+      const res = await fetch(`${BASE_URL}/api/payment/topup/create-order`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
-        body:    JSON.stringify({ amount: Number(amount), method }),
+        body:    JSON.stringify({ amount: amt }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
-      setSubmitted(true);
-      onSuccess(data.newBalance);
-      setTimeout(() => onClose(), 2000);
+
+      // Step 2 — Open Razorpay checkout
+      const options = {
+        key:         RAZORPAY_KEY,
+        amount:      data.amount,   // paise
+        currency:    'INR',
+        name:        'FreelanceHub',
+        description: 'Wallet Top-up',
+        order_id:    data.orderId,
+        handler: async (response) => {
+          // Step 3 — Verify payment
+          try {
+            const verifyRes = await fetch(`${BASE_URL}/api/payment/topup/verify`, {
+              method:  'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+              body:    JSON.stringify({
+                razorpay_order_id:   response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature:  response.razorpay_signature,
+                amount:              amt,
+              }),
+            });
+            const verifyData = await verifyRes.json();
+            if (!verifyRes.ok) throw new Error(verifyData.message);
+
+            setSubmitted(true);
+            onSuccess(verifyData.newBalance); // pass new balance to parent
+            setTimeout(() => onClose(), 2000);
+          } catch (e) {
+            setError('Payment verification failed: ' + e.message);
+          }
+        },
+        prefill: { name: '', email: '' },
+        theme: { color: '#0d9488' },
+        modal: {
+          ondismiss: () => {
+            setError('Payment cancelled.');
+            setSubmitting(false);
+          },
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
     } catch (e) {
-      setError(e.message);
-    } finally {
-      setSubmitting(false);
+      setError(e.message || 'Something went wrong.');
     }
+
+    setSubmitting(false);
   };
 
   return (
@@ -315,36 +457,33 @@ function AddFundsModal({ onClose, onSuccess }) {
             <div className="bg-teal-50 border border-teal-200 rounded-xl p-3 text-xs text-teal-700 font-medium">
               Funds go to your wallet and can be used to pay freelancers via escrow.
             </div>
+
             {error && <p className="text-xs text-rose-500 font-medium">{error}</p>}
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Payment Method</label>
-              <div className="grid grid-cols-3 gap-2">
-                {['upi', 'card', 'netbanking'].map(m => (
-                  <button key={m} onClick={() => setMethod(m)}
-                    className={`py-2 rounded-xl border text-[11px] font-bold transition-all capitalize ${method === m ? 'bg-teal-600 text-white border-teal-600' : 'border-slate-200 text-slate-600 hover:border-teal-300'}`}>
-                    {m === 'netbanking' ? 'Net Bank' : m.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-            </div>
+
             <div className="space-y-1.5">
               <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Amount (₹)</label>
-              <input type="number" placeholder="Enter amount" value={amount}
-                onChange={e => setAmount(e.target.value)}
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-teal-400" />
+              <input
+                type="number" placeholder="Enter amount (min ₹1)"
+                value={amount} onChange={e => setAmount(e.target.value)} min={1}
+                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-teal-400"
+              />
             </div>
+
+            {/* Quick amounts */}
             <div className="flex gap-2">
-              {[10000, 25000, 50000].map(q => (
+              {[10, 50, 100, 500].map(q => (
                 <button key={q} onClick={() => setAmount(String(q))}
                   className="flex-1 py-1.5 text-xs font-semibold border border-slate-200 rounded-lg hover:border-teal-400 hover:text-teal-600 transition-all">
-                  {formatINR(q)}
+                  ₹{q}
                 </button>
               ))}
             </div>
-            <button onClick={handleSubmit}
-              disabled={!amount || Number(amount) <= 0 || submitting}
+
+            <button
+              onClick={handleSubmit}
+              disabled={!amount || Number(amount) < 1 || submitting}
               className="w-full py-2.5 bg-teal-600 text-white text-sm font-bold rounded-xl hover:bg-teal-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-              {submitting ? 'Processing...' : 'Add Funds'}
+              {submitting ? 'Opening Payment...' : 'Add Funds via Razorpay'}
             </button>
           </>
         ) : (
@@ -353,7 +492,7 @@ function AddFundsModal({ onClose, onSuccess }) {
               <CheckCircle className="w-7 h-7 text-teal-600" />
             </div>
             <p className="text-sm font-bold text-slate-800">Funds Added!</p>
-            <p className="text-xs text-slate-500">{formatINR(Number(amount))} has been added to your wallet.</p>
+            <p className="text-xs text-slate-500">₹{amount} has been added to your wallet.</p>
           </div>
         )}
       </div>
@@ -363,12 +502,12 @@ function AddFundsModal({ onClose, onSuccess }) {
 
 // ─── Transactions Panel ───────────────────────────────────────────────────────
 function TransactionsPanel({ transactions }) {
-  const [typeFilter, setTypeFilter]     = useState('All');
+  const [typeFilter,   setTypeFilter]   = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [search, setSearch]             = useState('');
-  const [sortDir, setSortDir]           = useState('desc');
-  const [showAll, setShowAll]           = useState(false);
-  const [filtersOpen, setFiltersOpen]   = useState(false);
+  const [search,       setSearch]       = useState('');
+  const [sortDir,      setSortDir]      = useState('desc');
+  const [showAll,      setShowAll]      = useState(false);
+  const [filtersOpen,  setFiltersOpen]  = useState(false);
 
   const filtered = useMemo(() => {
     let r = [...transactions];
@@ -376,9 +515,17 @@ function TransactionsPanel({ transactions }) {
     if (statusFilter !== 'All') r = r.filter(t => t.status === statusFilter);
     if (search.trim()) {
       const q = search.toLowerCase();
-      r = r.filter(t => t.type.toLowerCase().includes(q) || t.description.toLowerCase().includes(q) || t.project.toLowerCase().includes(q));
+      r = r.filter(t =>
+        t.type.toLowerCase().includes(q) ||
+        (t.description || '').toLowerCase().includes(q) ||
+        (t.project || '').toLowerCase().includes(q)
+      );
     }
-    r.sort((a, b) => sortDir === 'desc' ? b.id - a.id : a.id - b.id);
+    r.sort((a, b) => {
+      const da = new Date(a.dateValue || a.createdAt);
+      const db = new Date(b.dateValue || b.createdAt);
+      return sortDir === 'desc' ? db - da : da - db;
+    });
     return r;
   }, [transactions, typeFilter, statusFilter, search, sortDir]);
 
@@ -465,7 +612,7 @@ function TransactionsPanel({ transactions }) {
       <div className="divide-y divide-slate-100">
         {displayed.length === 0
           ? <div className="py-10 text-center text-sm text-slate-400">No transactions match your filters.</div>
-          : displayed.map(tx => <TransactionRow key={tx.id} tx={tx} />)
+          : displayed.map((tx, i) => <TransactionRow key={tx._id || i} tx={tx} />)
         }
       </div>
 
@@ -484,37 +631,58 @@ function TransactionsPanel({ transactions }) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function ClientTransactionSummary() {
-  const [dateRange, setDateRange]       = useState(DATE_RANGES[0]);
-  const [chartTab, setChartTab]         = useState('this');
-  const [showAddFunds, setShowAddFunds] = useState(false);
+  const [dateRange,     setDateRange]     = useState(DATE_RANGES[0]);
+  const [chartTab,      setChartTab]      = useState('this');
+  const [showAddFunds,  setShowAddFunds]  = useState(false);
 
-  const [loading, setLoading]           = useState(true);
-  const [error, setError]               = useState(null);
-  const [metrics, setMetrics]           = useState([]);
-  const [transactions, setTransactions] = useState([]);
+  const [loading,       setLoading]       = useState(true);
+  const [error,         setError]         = useState(null);
+  const [metrics,       setMetrics]       = useState([]);
+  const [transactions,  setTransactions]  = useState([]);
   const [chartThisMonth, setChartThisMonth] = useState([]);
   const [chartLastMonth, setChartLastMonth] = useState([]);
-  const [breakdown, setBreakdown]       = useState([]);
+  const [breakdown,     setBreakdown]     = useState([]);
   const [totalBreakdown, setTotalBreakdown] = useState(0);
-  const [walletBalance, setWalletBalance]   = useState(0);
+  const [walletBalance, setWalletBalance] = useState(0);
 
-  const fetchData = async (range) => {
+  // ── Fetch wallet + transactions from our APIs ─────────────────────────────
+  const fetchData = async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch(
-        `${BASE_URL}/api/client/transactions?range=${encodeURIComponent(range)}`,
-        { headers: { Authorization: `Bearer ${getToken()}` } }
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-      setMetrics(data.metrics               || []);
-      setTransactions(data.transactions     || []);
-      setChartThisMonth(data.chartDataThisMonth || []);
-      setChartLastMonth(data.chartDataLastMonth || []);
-      setBreakdown(data.breakdown           || []);
-      setTotalBreakdown(data.totalForBreakdown || 0);
-      setWalletBalance(data.walletBalance   || 0);
+
+      // Parallel fetch — wallet and transactions
+      const [walletRes, txRes] = await Promise.all([
+        fetch(`${BASE_URL}/api/payment/wallet`, {
+          headers: { Authorization: `Bearer ${getToken()}` },
+        }),
+        fetch(`${BASE_URL}/api/payment/transactions`, {
+          headers: { Authorization: `Bearer ${getToken()}` },
+        }),
+      ]);
+
+      const walletData = await walletRes.json();
+      const txData     = await txRes.json();
+
+      if (!walletRes.ok) throw new Error(walletData.message);
+      if (!txRes.ok)     throw new Error(txData.message);
+
+      const wallet       = walletData.wallet;
+      const transactions = txData.transactions || [];
+
+      // Build all derived data on frontend
+      const builtMetrics            = buildMetrics(wallet, transactions);
+      const { breakdown, total }    = buildBreakdown(transactions);
+      const thisMonthChart          = buildChartData(transactions, 0);
+      const lastMonthChart          = buildChartData(transactions, 1);
+
+      setWalletBalance(wallet?.balance || 0);
+      setMetrics(builtMetrics);
+      setTransactions(transactions);
+      setChartThisMonth(thisMonthChart);
+      setChartLastMonth(lastMonthChart);
+      setBreakdown(breakdown);
+      setTotalBreakdown(total);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -522,7 +690,9 @@ export default function ClientTransactionSummary() {
     }
   };
 
-  useEffect(() => { fetchData(dateRange); }, [dateRange]);
+  useEffect(() => { fetchData(); }, []);
+  // Note: dateRange filter is frontend-only since we fetch all transactions
+  // and filter/group them on the client side
 
   const chartData = chartTab === 'this' ? chartThisMonth : chartLastMonth;
 
@@ -621,7 +791,7 @@ export default function ClientTransactionSummary() {
           onClose={() => setShowAddFunds(false)}
           onSuccess={(newBal) => {
             setWalletBalance(newBal);
-            fetchData(dateRange);
+            fetchData(); // refresh all data after top-up
           }}
         />
       )}
