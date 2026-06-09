@@ -346,7 +346,8 @@ const AccountSettings = () => {
           communicationPreference: data.communicationPreference || "",
           autoInviteFreelancers: data.autoInviteFreelancers ?? false,
           jobVisibility: data.jobVisibility || "Public",
-          walletBalance: data.walletBalance ?? 0, paymentMethod: data.paymentMethod || "",
+          walletBalance: 0, // ✅ fetched from /api/payment/wallet
+          paymentMethod: data.paymentMethod || "",
           upi_id: data.upi_id || "", billingAddress: data.billingAddress || "",
           lastSignIn: data.lastSignIn || new Date().toISOString(),
           notifications: { ...DEFAULT_NOTIFICATIONS, ...(data.notifications || {}) },

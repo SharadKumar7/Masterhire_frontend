@@ -208,7 +208,8 @@ const OfferCard = ({ item }) => (
               </button>
             )}
             {(item.status === "Expired" || item.status === "Rejected") && (
-              <button className="text-xs font-bold text-slate-500 border border-slate-200 hover:bg-slate-50 px-3 py-1.5 rounded-lg transition-all">
+              <button className="text-xs font-bold text-slate-500 border border-slate-200 hover:bg-slate-50 px-3 py-1.5 rounded-lg transition-all"
+              >
                 View Details
               </button>
             )}

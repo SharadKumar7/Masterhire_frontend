@@ -44,7 +44,6 @@ const MasterHireLoginPage = () => {
     try {
       const res = await login(formData.email, formData.password);
 
-      console.log("LOGIN RESPONSE:", res);
 
       if (res.success) {
         handleRedirect(res.role, res.isProfileComplete);
@@ -80,6 +79,7 @@ const MasterHireLoginPage = () => {
 
       // ✅ sync with AuthContext instead of raw localStorage
       localStorage.setItem("token", data.token);
+      localStorage.setItem("role", data.user.role);
       setToken(data.token);
       setUser({
         role: data.user.role,

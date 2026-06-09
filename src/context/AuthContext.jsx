@@ -61,7 +61,10 @@ const login = async (email, password) => {
     return { success: false, message: data.message };
   }
 
+  console.log("Login successful, received data:", data);
+
   localStorage.setItem("token", data.token);
+  localStorage.setItem("role", data.role);
   setToken(data.token);
   setUser({
     role: data.role,

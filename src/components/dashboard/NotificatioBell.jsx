@@ -8,7 +8,7 @@ import {
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
-// ─── Type config — icon + colors per notification type ────────────────────────
+// ─── Type config ──────────────────────────────────────────────────────────────
 const TYPE_CONFIG = {
   JOB_APPLIED: {
     icon: BriefcaseBusiness,
@@ -50,31 +50,37 @@ const timeAgo = (dateStr) => {
   return new Date(dateStr).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 };
 
-// ─── Navigation links per notification type ───────────────────────────────────
-// ⚠️ Replace these URLs with your actual route paths
-const getNotificationLink = (type, referenceId) => {
+// ─── Role-based navigation ────────────────────────────────────────────────────
+const getNotificationLink = (type, referenceId, role) => {
   const id = referenceId?.toString() || "";
+  const isClient = role === "client";
+
+
   switch (type) {
     case "JOB_APPLIED":
-      // Client → job applications page (someone applied to your job)
-      // Freelancer → their application status page
-      return `/client/dashboard/jobs/${id}/applications`;
+      return isClient
+        ? `/client/dashboard/project-applications/${id}`
+        : `/freelancer/dashboard/applications/${id}`;
 
     case "JOB_ASSIGNED":
-      // Freelancer → job detail / contract page
-      return `/freelancer/dashboard/applications/${id}`;
+      return isClient
+        ? `/client/dashboard/workspace/${id}`
+        : `/freelancer/dashboard/workspace/${id}`;
 
     case "NEW_MESSAGE":
-      // Both → message thread for this job
-      return `/freelancer/dashboard/messages/${id}`;
+      return isClient
+        ? `/client/dashboard/project-applications/${id}`
+        : `/freelancer/dashboard/applications/${id}`;
 
     case "PAYMENT_RECEIVED":
-      // Freelancer → transaction/payment page
-      return `/freelancer/dashboard/transactions`;
+      return isClient
+        ? `/client/dashboard/transactions`
+        : `/freelancer/dashboard/transaction-summary`;
 
     case "JOB_COMPLETED":
-      // Both → contract detail
-      return `/freelancer/dashboard/contracts/${id}`;
+      return isClient
+        ? `/client/dashboard/contracts`
+        : `/freelancer/dashboard/contract-history`;
 
     default:
       return null;
@@ -82,7 +88,7 @@ const getNotificationLink = (type, referenceId) => {
 };
 
 // ─── Single notification row ──────────────────────────────────────────────────
-const NotificationItem = ({ notification, onMarkRead, onDelete, onClose }) => {
+const NotificationItem = ({ notification, onMarkRead, onDelete, onClose, role }) => {
   const navigate = useNavigate();
   const cfg  = TYPE_CONFIG[notification.type] || TYPE_CONFIG.NEW_MESSAGE;
   const Icon = cfg.icon;
@@ -90,7 +96,7 @@ const NotificationItem = ({ notification, onMarkRead, onDelete, onClose }) => {
   const handleClick = () => {
     if (!notification.isRead) onMarkRead(notification._id);
     onClose();
-    const link = getNotificationLink(notification.type, notification.referenceId);
+    const link = getNotificationLink(notification.type, notification.referenceId, role);
     if (link) navigate(link);
   };
 
@@ -101,12 +107,12 @@ const NotificationItem = ({ notification, onMarkRead, onDelete, onClose }) => {
         !notification.isRead ? "bg-teal-50/50" : ""
       }`}
     >
-      {/* Unread indicator dot */}
+      {/* Unread dot */}
       {!notification.isRead && (
         <span className={`absolute left-1.5 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dotColor}`} />
       )}
 
-      {/* Type icon */}
+      {/* Icon */}
       <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${cfg.iconBg}`}>
         <Icon size={15} />
       </div>
@@ -126,7 +132,7 @@ const NotificationItem = ({ notification, onMarkRead, onDelete, onClose }) => {
         <p className="text-[10px] text-slate-400 mt-1">{timeAgo(notification.createdAt)}</p>
       </div>
 
-      {/* Action buttons — visible on hover */}
+      {/* Actions */}
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
         {!notification.isRead && (
           <button
@@ -149,14 +155,17 @@ const NotificationItem = ({ notification, onMarkRead, onDelete, onClose }) => {
   );
 };
 
-// ─── Main NotificationBell component ─────────────────────────────────────────
+// ─── Main NotificationBell ────────────────────────────────────────────────────
 const NotificationBell = () => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading]             = useState(false);
   const [error, setError]                 = useState(false);
   const [open, setOpen]                   = useState(false);
-  const [filter, setFilter]               = useState("all"); // "all" | "unread"
+  const [filter, setFilter]               = useState("all");
   const dropdownRef = useRef(null);
+
+  // ── Role from localStorage ────────────────────────────────────────────────
+  const role = localStorage.getItem("role");
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
@@ -254,7 +263,7 @@ const NotificationBell = () => {
   return (
     <div className="relative" ref={dropdownRef}>
 
-      {/* ── Bell button ── */}
+      {/* Bell button */}
       <button
         onClick={() => setOpen(o => !o)}
         className={`relative p-2 rounded-xl transition-all ${
@@ -271,7 +280,7 @@ const NotificationBell = () => {
         )}
       </button>
 
-      {/* ── Dropdown ── */}
+      {/* Dropdown */}
       {open && (
         <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 overflow-hidden">
 
@@ -361,6 +370,7 @@ const NotificationBell = () => {
                   onMarkRead={markRead}
                   onDelete={deleteOne}
                   onClose={() => setOpen(false)}
+                  role={role}
                 />
               ))
             )}

@@ -21,6 +21,22 @@ const api = async (path, method = "GET", body = null) => {
   return data;
 };
 
+// ✅ Payment API helper
+const paymentApi = async (path, method = "GET", body = null) => {
+  const opts = {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getToken()}`,
+    },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(`${apiUrl}/api/payment${path}`, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "Request failed");
+  return data;
+};
+
 // ─── DEFAULT NOTIFICATIONS ────────────────────────────────────────────────────
 const DEFAULT_NOTIFICATIONS = {
   jobRecommendations: true,
@@ -35,7 +51,7 @@ const DEFAULT_NOTIFICATIONS = {
   passwordChange: true,
 };
 
-// ─── Change Password Modal ────────────────────────────────────────────────────
+// ─── Change Password Modal — SAME ─────────────────────────────────────────────
 const ChangePasswordModal = ({ onClose, onSave, saving }) => {
   const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [errors, setErrors] = useState({});
@@ -83,7 +99,6 @@ const ChangePasswordModal = ({ onClose, onSave, saving }) => {
           <Field label="Current Password" field="currentPassword" showKey="current" />
           <Field label="New Password" field="newPassword" showKey="new" />
           <Field label="Confirm New Password" field="confirmPassword" showKey="confirm" />
-
           {form.newPassword && (
             <div className="flex gap-1">
               {[...Array(4)].map((_, i) => (
@@ -96,7 +111,6 @@ const ChangePasswordModal = ({ onClose, onSave, saving }) => {
               ))}
             </div>
           )}
-
           <div className="flex gap-3 pt-2">
             <button onClick={onClose} className="flex-1 py-2.5 border rounded-xl font-medium text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
             <button
@@ -112,17 +126,25 @@ const ChangePasswordModal = ({ onClose, onSave, saving }) => {
   );
 };
 
-// ─── Withdraw Modal ───────────────────────────────────────────────────────────
-const WithdrawModal = ({ balance, onClose, onConfirm, saving }) => {
-  const [amount, setAmount] = useState("");
-  const [error, setError] = useState("");
+// ─── Withdraw Modal — ✅ Updated: UPI + Bank, min ₹1 ─────────────────────────
+const WithdrawModal = ({ balance, upiId, onClose, onConfirm, saving }) => {
+  const [amount,      setAmount]      = useState("");
+  const [method,      setMethod]      = useState("upi");
+  const [upiInput,    setUpiInput]    = useState(upiId || "");
+  const [accountNo,   setAccountNo]   = useState("");
+  const [ifsc,        setIfsc]        = useState("");
+  const [accountName, setAccountName] = useState("");
+  const [error,       setError]       = useState("");
 
   const handleConfirm = () => {
     const num = Number(amount);
-    if (!amount || isNaN(num) || num <= 0) { setError("Enter a valid amount"); return; }
-    if (num < 100) { setError("Minimum withdrawal is ₹100"); return; }
-    if (num > Number(balance)) { setError("Amount exceeds available balance"); return; }
-    onConfirm(num);
+    if (!amount || isNaN(num) || num <= 0)         { setError("Enter a valid amount"); return; }
+    if (num > Number(balance))                      { setError("Amount exceeds available balance"); return; }
+    if (method === "upi" && !upiInput)              { setError("Enter your UPI ID"); return; }
+    if (method === "bank" && (!accountNo || !ifsc || !accountName)) {
+      setError("Fill all bank details"); return;
+    }
+    onConfirm({ amount: num, method, upiId: upiInput, bankDetails: { accountNumber: accountNo, ifsc, accountName } });
   };
 
   return (
@@ -133,39 +155,68 @@ const WithdrawModal = ({ balance, onClose, onConfirm, saving }) => {
           <button onClick={onClose}><X size={20} className="text-white/80" /></button>
         </div>
         <div className="p-6 space-y-4">
+          {/* Balance */}
           <div className="bg-teal-50 rounded-xl p-4 flex justify-between">
             <span className="text-sm text-teal-700">Available Balance</span>
             <span className="font-bold text-teal-700">₹{Number(balance).toLocaleString("en-IN")}</span>
           </div>
 
+          {/* ✅ Method toggle */}
+          <div className="grid grid-cols-2 gap-2">
+            {["upi", "bank"].map(m => (
+              <button key={m} onClick={() => setMethod(m)}
+                className={`py-2 rounded-xl border text-sm font-bold transition-all ${
+                  method === m ? "bg-teal-600 text-white border-teal-600" : "border-slate-200 text-slate-600 hover:border-teal-300"
+                }`}>
+                {m === "upi" ? "📱 UPI" : "🏦 Bank Transfer"}
+              </button>
+            ))}
+          </div>
+
+          {/* UPI field */}
+          {method === "upi" && (
+            <div>
+              <p className="text-sm text-gray-500 mb-1 font-medium">UPI ID</p>
+              <input value={upiInput} onChange={e => setUpiInput(e.target.value)}
+                placeholder="name@upi"
+                className="w-full px-4 py-2.5 border-2 rounded-xl text-sm outline-none focus:border-teal-500" />
+            </div>
+          )}
+
+          {/* Bank fields */}
+          {method === "bank" && (
+            <div className="space-y-2">
+              <input value={accountName} onChange={e => setAccountName(e.target.value)}
+                placeholder="Account Holder Name"
+                className="w-full px-4 py-2.5 border-2 rounded-xl text-sm outline-none focus:border-teal-500" />
+              <input value={accountNo} onChange={e => setAccountNo(e.target.value)}
+                placeholder="Account Number"
+                className="w-full px-4 py-2.5 border-2 rounded-xl text-sm outline-none focus:border-teal-500" />
+              <input value={ifsc} onChange={e => setIfsc(e.target.value.toUpperCase())}
+                placeholder="IFSC Code"
+                className="w-full px-4 py-2.5 border-2 rounded-xl text-sm outline-none focus:border-teal-500" />
+            </div>
+          )}
+
+          {/* Amount */}
           <div>
             <p className="text-sm text-gray-500 mb-2 font-medium">Enter amount to withdraw</p>
             <div className="flex items-center border-2 rounded-xl overflow-hidden focus-within:border-teal-500 transition">
               <span className="px-4 text-lg font-bold text-gray-400 border-r py-3">₹</span>
-              <input
-                type="number" min="100" max={balance}
+              <input type="number" min="1" max={balance}
                 value={amount}
                 onChange={(e) => { setAmount(e.target.value); setError(""); }}
                 placeholder="Enter amount"
-                className="flex-1 px-4 py-3 text-lg font-semibold outline-none"
-              />
+                className="flex-1 px-4 py-3 text-lg font-semibold outline-none" />
             </div>
             {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
-            <p className="text-xs text-gray-400 mt-1">Minimum: ₹100 • Will be sent to your UPI ID</p>
+            <p className="text-xs text-gray-400 mt-1">Min: ₹1 • Simulated transfer (demo)</p>
           </div>
 
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
-            ⚠️ Final amount may vary after applicable tax deductions.
+            ⚠️ Platform fee (10%) already deducted at milestone approval.
           </div>
 
-          {/*
-            TODO: Payment Gateway / Payout Integration
-            When Razorpay Payouts / manual payout is added:
-            1. Call POST /api/freelancer/settings/create-withdrawal { amount }
-            2. Backend verifies balance, deducts, creates payout via Razorpay Payouts API
-            3. Store withdrawal record in DB
-            Replace onConfirm(num) below with that flow.
-          */}
           <div className="flex gap-3">
             <button onClick={onClose} className="flex-1 py-2.5 border rounded-xl font-medium text-sm text-gray-600">Cancel</button>
             <button onClick={handleConfirm} disabled={saving}
@@ -182,10 +233,10 @@ const WithdrawModal = ({ balance, onClose, onConfirm, saving }) => {
 // ─── Main Component ───────────────────────────────────────────────────────────
 const FreelancerAccountSettings = () => {
   const [activeTab, setActiveTab] = useState("Contact info");
-  const [loading, setLoading]     = useState(true);
-  const [saving, setSaving]       = useState(false);
-  const [error, setError]         = useState("");
-  const [success, setSuccess]     = useState("");
+  const [loading,   setLoading]   = useState(true);
+  const [saving,    setSaving]    = useState(false);
+  const [error,     setError]     = useState("");
+  const [success,   setSuccess]   = useState("");
 
   const [userData, setUserData] = useState({
     name: "", email: "", phone: "",
@@ -198,27 +249,28 @@ const FreelancerAccountSettings = () => {
     lastSignIn: new Date().toISOString(),
   });
 
-  const [draft, setDraft]               = useState({});
+  const [draft,        setDraft]        = useState({});
   const [editingField, setEditingField] = useState(null);
 
   // Modals
-  const [showDeleteModal, setShowDeleteModal]     = useState(false);
-  const [deleteStep, setDeleteStep]               = useState("confirm");
-  const [otp, setOtp]                             = useState("");
-  const [otpSending, setOtpSending]               = useState(false);
-  const [showPasswordModal, setShowPasswordModal] = useState(false); // FIX: replaces alert()
-  const [showWithdrawModal, setShowWithdrawModal] = useState(false); // FIX: replaces nothing
+  const [showDeleteModal,   setShowDeleteModal]   = useState(false);
+  const [deleteStep,        setDeleteStep]        = useState("confirm");
+  const [otp,               setOtp]               = useState("");
+  const [otpSending,        setOtpSending]        = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
 
-  // FIX: withdrawal history from API, not hardcoded
+  // ✅ Wallet state
+  const [walletData,        setWalletData]        = useState(null);
   const [withdrawalHistory, setWithdrawalHistory] = useState([]);
+  const [walletLoading,     setWalletLoading]     = useState(false);
 
-  // ─── Flash helpers ──────────────────────────────────────────────────────────
   const flash = (type, msg) => {
     if (type === "success") { setSuccess(msg); setTimeout(() => setSuccess(""), 3000); }
     else { setError(msg); setTimeout(() => setError(""), 4000); }
   };
 
-  // ─── Fetch profile ──────────────────────────────────────────────────────────
+  // ─── Fetch profile ────────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
       try {
@@ -240,8 +292,6 @@ const FreelancerAccountSettings = () => {
         };
         setUserData(merged);
         setDraft(merged);
-        // FIX: withdrawal history from API
-        setWithdrawalHistory(data.withdrawalHistory || []);
       } catch (e) {
         flash("error", "Failed to load profile: " + e.message);
       } finally {
@@ -250,6 +300,39 @@ const FreelancerAccountSettings = () => {
     })();
   }, []);
 
+  // ✅ Fetch wallet when Withdrawals tab opens
+  useEffect(() => {
+    if (activeTab === "Withdrawals") fetchWalletData();
+  }, [activeTab]);
+
+  const fetchWalletData = async () => {
+    try {
+      setWalletLoading(true);
+      const [walletRes, txRes] = await Promise.all([
+        paymentApi("/wallet"),
+        paymentApi("/transactions"),
+      ]);
+      setWalletData(walletRes.wallet);
+      setUserData(prev => ({ ...prev, balance: walletRes.wallet?.balance || 0 }));
+
+      // Filter withdrawal transactions
+      const withdrawals = (txRes.transactions || [])
+        .filter(t => t.type === "Withdrawal")
+        .map(t => ({
+          _id:    t._id,
+          amount: t.amount,
+          date:   t.dateValue || t.createdAt,
+          status: t.status === "Completed" ? "Completed" : "Pending",
+          method: t.description || "",
+        }));
+      setWithdrawalHistory(withdrawals);
+    } catch (e) {
+      flash("error", "Failed to load wallet: " + e.message);
+    } finally {
+      setWalletLoading(false);
+    }
+  };
+
   useEffect(() => {
     setDraft(userData);
     setEditingField(null);
@@ -257,7 +340,7 @@ const FreelancerAccountSettings = () => {
     setSuccess("");
   }, [activeTab]); // eslint-disable-line
 
-  // ─── Save handlers ──────────────────────────────────────────────────────────
+  // ─── Save handlers — SAME as original ────────────────────────────────────
   const handleSaveContact = async () => {
     try {
       setSaving(true);
@@ -313,7 +396,6 @@ const FreelancerAccountSettings = () => {
     finally { setSaving(false); }
   };
 
-  // FIX: proper password change via modal
   const handleChangePassword = async (currentPassword, newPassword) => {
     try {
       setSaving(true);
@@ -324,7 +406,6 @@ const FreelancerAccountSettings = () => {
     finally { setSaving(false); }
   };
 
-  // FIX: proper logout all devices API call
   const handleLogoutAllDevices = async () => {
     if (!window.confirm("Log out from all other devices?")) return;
     try {
@@ -333,27 +414,34 @@ const FreelancerAccountSettings = () => {
     } catch (e) { flash("error", e.message); }
   };
 
-  // FIX: withdraw via modal
-  const handleWithdraw = async (amount) => {
+  // ✅ Withdraw via payment API
+  const handleWithdraw = async ({ amount, method, upiId, bankDetails }) => {
     try {
       setSaving(true);
-      /*
-        TODO: Payout Integration
-        Replace this with Razorpay Payouts flow:
-        const { data } = await api("/create-withdrawal", "POST", { amount });
-        Then update balance & history from response.
-      */
-      const { data } = await api("/withdraw", "POST", { amount });
-      const updated = { ...userData, balance: data.balance };
-      setUserData(updated); setDraft(updated);
-      setWithdrawalHistory(data.withdrawalHistory || withdrawalHistory);
+      const data = await paymentApi("/withdraw", "POST", {
+        amount,
+        method,
+        upiId:       method === "upi"  ? upiId       : undefined,
+        bankDetails: method === "bank" ? bankDetails : undefined,
+      });
+      setUserData(prev => ({ ...prev, balance: data.newBalance }));
+      setWalletData(prev => prev ? { ...prev, balance: data.newBalance } : prev);
+      setWithdrawalHistory(prev => [{
+        _id:    Date.now(),
+        amount: amount,
+        date:   new Date().toISOString(),
+        status: "Completed",
+        method: method,
+      }, ...prev]);
       setShowWithdrawModal(false);
-      flash("success", `₹${amount.toLocaleString("en-IN")} withdrawal requested!`);
-    } catch (e) { flash("error", e.message); }
-    finally { setSaving(false); }
+      flash("success", `₹${amount.toLocaleString("en-IN")} withdrawal successful!`);
+    } catch (e) {
+      flash("error", e.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  // ─── Delete flow ────────────────────────────────────────────────────────────
   const handleSendOTP = async () => {
     try {
       setOtpSending(true);
@@ -376,7 +464,7 @@ const FreelancerAccountSettings = () => {
 
   const handleCancel = () => { setDraft(userData); setEditingField(null); };
 
-  // ─── UI helpers ─────────────────────────────────────────────────────────────
+  // ─── UI helpers — SAME ────────────────────────────────────────────────────
   const SaveCancelBar = ({ onSave }) => (
     <div className="flex gap-4 pt-2">
       <button onClick={onSave} disabled={saving}
@@ -411,50 +499,38 @@ const FreelancerAccountSettings = () => {
     </div>
   );
 
-  // ─── Tab renderers ───────────────────────────────────────────────────────────
+  // ─── Tab renderers ────────────────────────────────────────────────────────
   const renderContent = () => {
     if (loading) return <div className="p-8 text-center text-gray-500">Loading profile…</div>;
     const blurClass = showDeleteModal ? "blur-sm pointer-events-none transition-all" : "";
 
     switch (activeTab) {
 
-      // ── CONTACT INFO ─────────────────────────────────────────────────────────
       case "Contact info":
         return (
           <div className={`space-y-6 ${blurClass}`}>
             <h2 className="text-xl font-semibold">Contact Info</h2>
-
             {["name", "email", "phone"].map((field) => (
               <div key={field} className="flex justify-between items-center p-4 border rounded-lg">
                 <div className="flex-grow">
                   <p className="text-sm text-gray-500 capitalize">{field === "name" ? "Name" : field === "email" ? "Email" : "Phone"}</p>
                   {editingField === field ? (
-                    <input
-                      className="font-medium border-b border-teal-500 outline-none w-full mt-1"
+                    <input className="font-medium border-b border-teal-500 outline-none w-full mt-1"
                       value={draft[field] || ""}
                       onChange={(e) => setDraft({ ...draft, [field]: e.target.value })}
-                      autoFocus
-                    />
+                      autoFocus />
                   ) : (
                     <p className="font-medium">
                       {userData[field] || "—"}
-                      {field === "email" && userData.email && (
-                        <span className="ml-2 text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded">Primary</span>
-                      )}
-                      {field === "phone" && userData.phone && (
-                        <span className="ml-2 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Verified</span>
-                      )}
+                      {field === "email" && userData.email && <span className="ml-2 text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded">Primary</span>}
+                      {field === "phone" && userData.phone && <span className="ml-2 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Verified</span>}
                     </p>
                   )}
                 </div>
-                {editingField !== field && (
-                  <Edit2 size={18} className="text-gray-400 cursor-pointer" onClick={() => setEditingField(field)} />
-                )}
+                {editingField !== field && <Edit2 size={18} className="text-gray-400 cursor-pointer" onClick={() => setEditingField(field)} />}
               </div>
             ))}
-
             {editingField && <SaveCancelBar onSave={handleSaveContact} />}
-
             <div className="pt-6 border-t">
               <h3 className="text-red-500 font-semibold mb-2">Account closure</h3>
               <p className="text-sm text-gray-500 mb-4">Closing your account is permanent. Please ensure all funds are withdrawn first.</p>
@@ -466,12 +542,10 @@ const FreelancerAccountSettings = () => {
           </div>
         );
 
-      // ── PROFILE SETTINGS ─────────────────────────────────────────────────────
       case "Profile settings":
         return (
           <div className={`space-y-6 ${blurClass}`}>
             <h2 className="text-xl font-semibold mb-6">Profile settings</h2>
-
             <div className="p-6 border rounded-xl bg-white">
               <p className="text-sm font-bold text-gray-900 mb-1">Category</p>
               <p className="font-semibold text-gray-900 mb-3">{draft.category || "—"}</p>
@@ -481,7 +555,6 @@ const FreelancerAccountSettings = () => {
                 ))}
               </div>
             </div>
-
             <div className="p-6 border rounded-xl bg-white">
               <p className="text-sm font-bold text-gray-900 mb-4">Experience level</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -503,13 +576,11 @@ const FreelancerAccountSettings = () => {
                 ))}
               </div>
             </div>
-
             <div className="p-6 border rounded-xl bg-white space-y-6">
               <div>
                 <label className="text-sm font-bold text-gray-900 block mb-2">Visibility</label>
                 <select className="w-full p-3 border rounded-lg text-sm bg-gray-50 outline-none"
-                  value={draft.visibility}
-                  onChange={(e) => setDraft({ ...draft, visibility: e.target.value })}>
+                  value={draft.visibility} onChange={(e) => setDraft({ ...draft, visibility: e.target.value })}>
                   <option>Public</option>
                   <option>Private</option>
                 </select>
@@ -529,12 +600,10 @@ const FreelancerAccountSettings = () => {
                 </div>
               </div>
             </div>
-
             <SaveCancelBar onSave={handleSaveProfile} />
           </div>
         );
 
-      // ── PASSWORD & SECURITY ──────────────────────────────────────────────────
       case "Password & security":
         return (
           <div className={`space-y-8 ${blurClass}`}>
@@ -546,7 +615,6 @@ const FreelancerAccountSettings = () => {
               </div>
               <div className="flex justify-between items-center py-2">
                 <span className="text-gray-900 font-medium">Password</span>
-                {/* FIX: proper modal instead of alert() */}
                 <button onClick={() => setShowPasswordModal(true)} className="text-teal-600 font-bold hover:underline">
                   Change password
                 </button>
@@ -557,30 +625,24 @@ const FreelancerAccountSettings = () => {
               </div>
             </div>
             <div className="pt-4 flex justify-end">
-              {/* FIX: actual API call instead of alert() */}
               <button onClick={handleLogoutAllDevices}
                 className="bg-red-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-red-600 transition-colors">
                 Log out from all devices
               </button>
             </div>
-
             {showPasswordModal && (
-              <ChangePasswordModal
-                onClose={() => setShowPasswordModal(false)}
-                onSave={handleChangePassword}
-                saving={saving}
-              />
+              <ChangePasswordModal onClose={() => setShowPasswordModal(false)} onSave={handleChangePassword} saving={saving} />
             )}
           </div>
         );
 
-      // ── WITHDRAWALS ──────────────────────────────────────────────────────────
+      // ✅ WITHDRAWALS — updated with payment API
       case "Withdrawals":
         return (
           <div className={`space-y-6 ${blurClass}`}>
             <h2 className="text-2xl font-bold mb-6">Withdrawals</h2>
 
-            {/* UPI */}
+            {/* UPI — same design */}
             <div className="p-6 border rounded-xl bg-white flex justify-between items-center shadow-sm">
               <div>
                 <p className="text-sm font-bold text-gray-900 mb-1">Withdrawal method</p>
@@ -608,39 +670,67 @@ const FreelancerAccountSettings = () => {
               )}
             </div>
 
-            {/* Balance */}
+            {/* ✅ Balance — from payment API */}
             <div className="p-6 border rounded-xl bg-white shadow-sm">
               <div className="flex justify-between items-center mb-4">
                 <div>
                   <p className="text-sm font-bold text-gray-900 mb-1">Withdrawable balance</p>
-                  <p className="text-3xl font-bold text-teal-600">₹ {Number(userData.balance).toLocaleString("en-IN")}</p>
+                  {walletLoading
+                    ? <p className="text-xl text-gray-400 animate-pulse">Loading…</p>
+                    : <p className="text-3xl font-bold text-teal-600">₹ {Number(walletData?.balance ?? userData.balance).toLocaleString("en-IN")}</p>
+                  }
                 </div>
-                {/* FIX: opens proper modal */}
                 <button onClick={() => setShowWithdrawModal(true)}
                   className="bg-teal-700 text-white px-6 py-2.5 rounded-lg text-sm font-bold hover:bg-teal-800 transition">
                   Withdraw money
                 </button>
               </div>
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex gap-2 items-start">
+
+              {/* ✅ Wallet stats */}
+              {walletData && (
+                <div className="grid grid-cols-3 gap-3 pt-4 border-t">
+                  <div className="text-center">
+                    <p className="text-xs text-gray-400 mb-1">Total Earned</p>
+                    <p className="text-sm font-bold text-teal-700">₹{Number(walletData.totalEarned || 0).toLocaleString("en-IN")}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-gray-400 mb-1">Total Withdrawn</p>
+                    <p className="text-sm font-bold text-gray-700">₹{Number(walletData.totalWithdrawn || 0).toLocaleString("en-IN")}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-gray-400 mb-1">Wallet Expires</p>
+                    <p className="text-sm font-bold text-amber-600">
+                      {walletData.walletExpiryDate
+                        ? new Date(walletData.walletExpiryDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
+                        : "—"}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex gap-2 items-start mt-4">
                 <span className="text-amber-600">⚠️</span>
                 <p className="text-xs text-amber-800 leading-relaxed">
-                  Note: The final amount credited may vary after applicable tax deductions as per government regulations.
+                  Platform fee (10%) is deducted at milestone approval. Wallet balance expires in 30 days.
                 </p>
               </div>
             </div>
 
-            {/* FIX: withdrawal history from API */}
+            {/* ✅ Withdrawal history from payment API */}
             <div className="space-y-4">
               <h3 className="text-lg font-bold">Withdrawal History</h3>
-              {withdrawalHistory.length === 0 ? (
+              {walletLoading ? (
+                <p className="text-sm text-gray-400 animate-pulse">Loading history…</p>
+              ) : withdrawalHistory.length === 0 ? (
                 <p className="text-sm text-gray-400">No withdrawals yet.</p>
               ) : (
                 withdrawalHistory.map((item) => (
-                  <div key={item._id || item.id} className="p-4 border rounded-xl bg-white flex justify-between items-center">
+                  <div key={item._id} className="p-4 border rounded-xl bg-white flex justify-between items-center">
                     <div className="space-y-1">
                       <p className="font-bold text-sm text-gray-900">Amount: ₹{Number(item.amount).toLocaleString("en-IN")}</p>
                       <p className="text-xs text-gray-500 font-medium">
-                        Requested on: {new Date(item.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                        {new Date(item.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                        {item.method && <span className="ml-2 uppercase text-gray-400">{item.method}</span>}
                       </p>
                     </div>
                     <span className={`px-4 py-1 rounded-full text-xs font-bold ${
@@ -655,7 +745,6 @@ const FreelancerAccountSettings = () => {
           </div>
         );
 
-      // ── NOTIFICATION SETTINGS ────────────────────────────────────────────────
       case "Notification settings":
         return (
           <div className={`pb-20 ${blurClass}`}>
@@ -693,7 +782,6 @@ const FreelancerAccountSettings = () => {
     }
   };
 
-  // ─── Root render ─────────────────────────────────────────────────────────────
   return (
     <div className="relative w-full max-w-6xl mx-auto p-8 flex gap-12 min-h-screen font-sans">
       {/* Sidebar */}
@@ -718,17 +806,18 @@ const FreelancerAccountSettings = () => {
         {renderContent()}
       </div>
 
-      {/* Withdraw Modal */}
+      {/* ✅ Withdraw Modal — UPI + Bank */}
       {showWithdrawModal && (
         <WithdrawModal
-          balance={userData.balance}
+          balance={walletData?.balance ?? userData.balance}
+          upiId={userData.upi_id}
           onClose={() => setShowWithdrawModal(false)}
           onConfirm={handleWithdraw}
           saving={saving}
         />
       )}
 
-      {/* Delete Modal */}
+      {/* Delete Modal — SAME */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
           <div className="bg-white p-8 rounded-2xl shadow-2xl max-w-sm w-full mx-4 border">
