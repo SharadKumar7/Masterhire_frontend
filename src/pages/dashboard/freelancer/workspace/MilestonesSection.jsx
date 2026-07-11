@@ -1,11 +1,18 @@
 // ─── FreelancerMilestonesSection.jsx ─────────────────────────────────────────
-// Freelancer view: submit work, upload files, view status, wait for approval
+// Freelancer view: PROPOSE milestones, submit work, upload files, view status, wait for approval.
+// ✅ FIX: "Add milestone" moved here from the client side. Freelancer creates the
+//    milestone and can immediately submit work for it — no client approval step
+//    is needed just to create it. Client only approves + pays once work is submitted.
 import React, { useState, useRef } from "react";
 import {
   Calendar, Clock, DollarSign, Upload, Download,
   ChevronDown, ChevronUp, Loader2, X, File,
 } from "lucide-react";
 import { Spinner, ErrorBanner, BASE_URL, getToken } from "../../shared/workspace/Shared";
+import AddMilestoneModal from "./AddMilestone";
+
+// ✅ FIX: single source of truth for platform fee — matches client side (5%)
+const PLATFORM_FEE_PCT = 5;
 
 const FreelancerMilestonesSection = ({ data, loading, error, projectId, onMilestoneUpdate }) => {
   const [openMilestoneIdx, setOpenMilestoneIdx] = useState(null);
@@ -14,6 +21,10 @@ const FreelancerMilestonesSection = ({ data, loading, error, projectId, onMilest
   const [submitNote, setSubmitNote]             = useState("");
   const [dragOver, setDragOver]                 = useState(false);
   const fileInputRef                            = useRef(null);
+
+  // ✅ Add milestone modal state (moved from client side)
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addingMilestone, setAddingMilestone] = useState(false);
 
   if (loading) return <Spinner text="Loading milestones..." />;
   if (error)   return <ErrorBanner message={error} />;
@@ -24,6 +35,29 @@ const FreelancerMilestonesSection = ({ data, loading, error, projectId, onMilest
 
   const toggleMilestone = (index) =>
     setOpenMilestoneIdx(openMilestoneIdx === index ? null : index);
+
+  // ✅ Add milestone — freelancer proposes a milestone for this job.
+  // Once created it lands in "pending" / "in progress" status, which `canSubmit`
+  // already allows, so the freelancer can submit work for it right away.
+  const handleAddMilestone = async (formData) => {
+    try {
+      setAddingMilestone(true);
+      const res = await fetch(`${BASE_URL}/api/job/${projectId}/milestones`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+        body:    JSON.stringify(formData),
+      });
+      const resData = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(resData.message || "Failed to add milestone");
+
+      setShowAddModal(false);
+      onMilestoneUpdate?.();
+    } catch (e) {
+      alert(`Failed to add milestone: ${e.message}`);
+    } finally {
+      setAddingMilestone(false);
+    }
+  };
 
   // ── Submit milestone ────────────────────────────────────────────────────────
   const handleSubmit = async (milestoneId) => {
@@ -83,6 +117,7 @@ const FreelancerMilestonesSection = ({ data, loading, error, projectId, onMilest
   };
 
   // Can freelancer submit? only if pending, in progress, or changes_requested
+  // ✅ Newly created milestones default to "pending", so they're immediately submittable — no client approval gate.
   const canSubmit = (status) =>
     ["pending", "in progress", "changes_requested"].includes(status);
 
@@ -115,16 +150,23 @@ const FreelancerMilestonesSection = ({ data, loading, error, projectId, onMilest
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-6 text-xs text-gray-500">
-          <span className="flex items-center gap-2">
-            <Calendar size={14} />Started: <strong className="text-gray-800">{summary.startedOn}</strong>
-          </span>
-          <span className="flex items-center gap-2">
-            <Clock size={14} />Deadline: <strong className="text-gray-800">{summary.deadline}</strong>
-          </span>
-          <span className="flex items-center gap-2">
-            <DollarSign size={14} />Duration: <strong className="text-gray-800">{summary.duration}</strong>
-          </span>
+        {/* ✅ FIX: "+ Add milestone" now lives here on the freelancer side */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap gap-6 text-xs text-gray-500">
+            <span className="flex items-center gap-2">
+              <Calendar size={14} />Started: <strong className="text-gray-800">{summary.startedOn}</strong>
+            </span>
+            <span className="flex items-center gap-2">
+              <Clock size={14} />Deadline: <strong className="text-gray-800">{summary.deadline}</strong>
+            </span>
+            <span className="flex items-center gap-2">
+              <DollarSign size={14} />Duration: <strong className="text-gray-800">{summary.duration}</strong>
+            </span>
+          </div>
+          <button onClick={() => setShowAddModal(true)}
+            className="bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold px-4 py-2 rounded-xl transition">
+            + Add milestone
+          </button>
         </div>
       </div>
 
@@ -136,7 +178,7 @@ const FreelancerMilestonesSection = ({ data, loading, error, projectId, onMilest
 
         {milestonesList.length === 0 && (
           <div className="py-16 border border-gray-100 rounded-2xl bg-gray-50/50 flex items-center justify-center">
-            <p className="text-gray-400 font-medium text-sm">No milestones added by client yet.</p>
+            <p className="text-gray-400 font-medium text-sm">No milestones yet. Click "+ Add milestone" to propose one.</p>
           </div>
         )}
 
@@ -149,6 +191,7 @@ const FreelancerMilestonesSection = ({ data, loading, error, projectId, onMilest
           const submittedOn = ms.submittedOn
             ? new Date(ms.submittedOn).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
             : null;
+          const platformFee = Math.round((ms.budget * PLATFORM_FEE_PCT) / 100);
 
           return (
             <div key={ms._id || index}
@@ -338,12 +381,12 @@ const FreelancerMilestonesSection = ({ data, loading, error, projectId, onMilest
                           <span className="font-semibold text-gray-900">₹{ms.budget.toLocaleString("en-IN")}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Platform fee (5%)</span>
-                          <span className="font-semibold text-red-500">- ₹{(ms.budget * 0.05).toLocaleString("en-IN")}</span>
+                          <span className="text-gray-500">Platform fee ({PLATFORM_FEE_PCT}%)</span>
+                          <span className="font-semibold text-red-500">- ₹{platformFee.toLocaleString("en-IN")}</span>
                         </div>
                         <div className="border-t border-dashed pt-4 flex justify-between">
                           <span className="font-semibold text-gray-900">You receive</span>
-                          <span className="font-bold text-teal-700">₹{(ms.budget * 0.95).toLocaleString("en-IN")}</span>
+                          <span className="font-bold text-teal-700">₹{(ms.budget - platformFee).toLocaleString("en-IN")}</span>
                         </div>
                         <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-500 leading-relaxed">
                           Payment released after client approves this milestone.
@@ -417,6 +460,13 @@ const FreelancerMilestonesSection = ({ data, loading, error, projectId, onMilest
           </div>
         </div>
       </div>
+
+      {/* ✅ Add Milestone Modal — freelancer proposes new milestones here */}
+      <AddMilestoneModal
+        isOpen={showAddModal}
+        onClose={() => !addingMilestone && setShowAddModal(false)}
+        onSubmit={handleAddMilestone}
+      />
     </div>
   );
 };

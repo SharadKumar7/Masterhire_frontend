@@ -44,6 +44,7 @@ const ApplicationTab = ({ jobId }) => {
   const [proposedAmount, setProposedAmount] = useState("");
   const [editMode, setEditMode]       = useState(false);
   const [submitting, setSubmitting]   = useState(false);
+  const [accepting, setAccepting]     = useState(false);
   const [successMsg, setSuccessMsg]   = useState("");
 
   const loadData = useCallback(async () => {
@@ -54,8 +55,8 @@ const ApplicationTab = ({ jobId }) => {
       setApplication(res.application);
       setProposedAmount(res.application?.bidAmount?.toString() || "");
 
-      // Load negotiation history if in negotiation
-      if (res.application?.status === "negotiation") {
+      // Load negotiation history if in negotiation or already accepted
+      if (["negotiation", "accepted"].includes(res.application?.status)) {
         try {
           const negRes = await apiFetch(`/api/freelancer/negotiation/${res.application._id}`);
           setHistory(negRes.history || []);
@@ -93,6 +94,26 @@ const ApplicationTab = ({ jobId }) => {
     }
   };
 
+  // Same API the client uses to accept an application — freelancer can trigger
+  // it too now (backend authorizes either side). This directly finalizes
+  // application.status = "accepted", no separate marker/history hack needed.
+  const handleAccept = async () => {
+    try {
+      setAccepting(true);
+      await apiFetch(`/api/client/${application._id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "accepted" }),
+      });
+      setSuccessMsg("Offer accepted! The job has been assigned.");
+      await loadData();
+      setTimeout(() => setSuccessMsg(""), 3000);
+    } catch (e) {
+      alert(`Error: ${e.message}`);
+    } finally {
+      setAccepting(false);
+    }
+  };
+
   if (loading) return <Spinner text="Loading your application..." />;
   if (error)   return <ErrorBanner message={error} />;
   if (!application) return (
@@ -104,6 +125,7 @@ const ApplicationTab = ({ jobId }) => {
 
   const canNegotiate  = ["pending", "negotiation"].includes(application.status);
   const isNegotiating = application.status === "negotiation";
+  const isAccepted    = application.status === "accepted";
   const counterCount  = history.filter((h) => h.proposedBy === "client").length;
   const clientLatest  = [...history].reverse().find((h) => h.proposedBy === "client");
   const myLatest      = [...history].reverse().find((h) => h.proposedBy === "freelancer");
@@ -255,8 +277,8 @@ const ApplicationTab = ({ jobId }) => {
         </div>
       )}
 
-      {/* ── Negotiation History ── */}
-      {isNegotiating && history.length > 0 && (
+      {/* ── Negotiation History — shown while negotiating or after acceptance ── */}
+      {(isNegotiating || isAccepted) && (history.length > 0 || isAccepted) && (
         <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
           <h3 className="text-sm font-bold text-gray-800 mb-4">Negotiation History</h3>
           <div className="space-y-1">
@@ -286,14 +308,33 @@ const ApplicationTab = ({ jobId }) => {
                 </div>
               );
             })}
+
+            {/* Shown once application.status is "accepted" — the real, final,
+                backend-stored state (either side can have triggered it) */}
+            {isAccepted && (
+              <div className="flex items-start gap-3 py-3 border-b border-gray-50 last:border-0">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 bg-green-100 text-green-700">
+                  <BadgeCheck size={16} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500">Accepted offer by freelancer</p>
+                  <p className="text-sm font-bold text-gray-900">
+                    ₹{(clientLatest?.proposedAmount ?? application.bidAmount)?.toLocaleString("en-IN")}
+                  </p>
+                </div>
+                <p className="text-[10px] text-gray-400 shrink-0">
+                  {formatDateTime(application.updatedAt)}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* ── Counter Offer Form — only when negotiating ── */}
+      {/* ── Counter Offer + Accept Offer — only when negotiating ── */}
       {isNegotiating && (
         <form onSubmit={handleSubmit} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-3">
-          <h3 className="text-sm font-bold text-gray-800">Send Counter Offer</h3>
+          <h3 className="text-sm font-bold text-gray-800">Respond to Offer</h3>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₹</span>
             <input
@@ -301,18 +342,30 @@ const ApplicationTab = ({ jobId }) => {
               value={proposedAmount}
               onChange={(e) => setProposedAmount(e.target.value)}
               placeholder="Enter your offer"
-              className="w-full border border-gray-200 rounded-xl pl-7 pr-4 py-3 text-sm focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+              disabled={accepting}
+              className="w-full border border-gray-200 rounded-xl pl-7 pr-4 py-3 text-sm focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 disabled:opacity-60 disabled:bg-gray-50"
               required
             />
           </div>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full bg-teal-700 hover:bg-teal-800 text-white py-3 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
-          >
-            {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-            {submitting ? "Sending..." : "Send Counter Offer"}
-          </button>
+          <div className="flex gap-3">
+            <button
+              type="submit"
+              disabled={submitting || accepting}
+              className="w-1/2 bg-teal-700 hover:bg-teal-800 text-white py-3 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+              {submitting ? "Sending..." : "Send Counter Offer"}
+            </button>
+            <button
+              type="button"
+              onClick={handleAccept}
+              disabled={submitting || accepting}
+              className="w-1/2 bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              {accepting ? <Loader2 size={16} className="animate-spin" /> : <BadgeCheck size={16} />}
+              {accepting ? "Accepting..." : "Accept Offer"}
+            </button>
+          </div>
         </form>
       )}
 

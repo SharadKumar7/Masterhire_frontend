@@ -1,16 +1,26 @@
 // ─── AddMilestoneModal.jsx ───────────────────────────────────────────────────
-import React, { useState } from "react";
+// Reusable form modal. Now used ONLY by the freelancer side
+// (FreelancerMilestonesSection.jsx) since freelancer proposes milestones.
+import React, { useState, useEffect } from "react";
 import { X, Calendar } from "lucide-react";
 
+const EMPTY_FORM = {
+  title: "",
+  description: "",
+  budget: "",
+  duration: "",
+  dueDate: "",
+  deliverables: "",
+};
+
 const AddMilestoneModal = ({ isOpen, onClose, onSubmit }) => {
-  const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    budget: "",
-    duration: "",
-    dueDate: "",
-    deliverables: "",
-  });
+  const [formData, setFormData] = useState(EMPTY_FORM);
+
+  // ✅ FIX: reset the form every time the modal is opened, so old values from a
+  // previously created milestone don't linger the next time it's opened.
+  useEffect(() => {
+    if (isOpen) setFormData(EMPTY_FORM);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -47,7 +57,7 @@ const AddMilestoneModal = ({ isOpen, onClose, onSubmit }) => {
             </button>
           </div>
           <p className="text-sm text-gray-500 mt-1">
-            Break down the project into milestones to track progress and payments.
+            Break down your work into milestones so the client can track progress and pay you as you go.
           </p>
         </div>
 
@@ -149,9 +159,9 @@ const AddMilestoneModal = ({ isOpen, onClose, onSubmit }) => {
           {/* Deliverables */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-0.5">
-              Deliverables / What freelancer should submit? <span className="text-red-500">*</span>
+              Deliverables / What will you submit? <span className="text-red-500">*</span>
             </label>
-            <p className="text-xs text-gray-400 mb-1.5">Mention what files, documents, or outputs you expect.</p>
+            <p className="text-xs text-gray-400 mb-1.5">Mention what files, documents, or outputs the client should expect.</p>
             <textarea
               name="deliverables"
               required

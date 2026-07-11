@@ -1,17 +1,19 @@
-// ─── MilestonesSection.jsx ───────────────────────────────────────────────────
+// ─── MilestonesSection.jsx (CLIENT SIDE) ─────────────────────────────────────
+// Client can: view milestones, review submitted work, approve & pay, request changes.
+// Client CANNOT add milestones anymore — that's now freelancer's job (see FreelancerMilestonesSection.jsx).
 import React, { useState } from "react";
 import {
   Calendar, Clock, DollarSign, Download,
   ChevronDown, ChevronUp, X, Wallet, CreditCard, CheckCircle,
 } from "lucide-react";
 import { Spinner, ErrorBanner, apiFetch } from "../../shared/workspace/Shared";
-import AddMilestoneModal from "./AddMilestone";
 
 const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY_ID;
 const BASE_URL     = import.meta.env.VITE_API_URL;
 const getToken     = () => localStorage.getItem("token");
 
-const PLATFORM_FEE_PCT = 10; // 10%
+// ✅ FIX: was 10, now 5 — matches freelancer side so both sides show the same numbers
+const PLATFORM_FEE_PCT = 5; // 5%
 
 // ─── Load Razorpay script ─────────────────────────────────────────────────────
 const loadRazorpayScript = () =>
@@ -188,7 +190,7 @@ const PaymentModal = ({ milestone, walletBalance = 0, projectId, onSuccess, onCl
                   <span className="font-semibold text-gray-900">₹{amount.toLocaleString("en-IN")}</span>
                 </div>
                 <div className="flex justify-between text-xs text-gray-400">
-                  <span>Platform fee (10%) — deducted from freelancer</span>
+                  <span>Platform fee ({PLATFORM_FEE_PCT}%) — deducted from freelancer</span>
                   <span>-₹{platformFee.toLocaleString("en-IN")}</span>
                 </div>
                 <div className="border-t border-dashed pt-3 flex justify-between font-bold">
@@ -282,10 +284,9 @@ const PaymentModal = ({ milestone, walletBalance = 0, projectId, onSuccess, onCl
   );
 };
 
-// ─── Main MilestonesSection ───────────────────────────────────────────────────
+// ─── Main MilestonesSection (CLIENT) ──────────────────────────────────────────
 const MilestonesSection = ({ data, loading, error, projectId, onMilestoneUpdate }) => {
   const [openMilestoneIdx, setOpenMilestoneIdx] = useState(null);
-  const [showAddModal,     setShowAddModal]      = useState(false);
   const [actionLoading,    setActionLoading]     = useState(null);
   const [reviewNote,       setReviewNote]        = useState("");
 
@@ -303,19 +304,9 @@ const MilestonesSection = ({ data, loading, error, projectId, onMilestoneUpdate 
   const toggleMilestone = (index) =>
     setOpenMilestoneIdx(openMilestoneIdx === index ? null : index);
 
-  // ── Add milestone ──────────────────────────────────────────────────────────
-  const handleAddMilestone = async (formData) => {
-    try {
-      await apiFetch(`/api/job/${projectId}/milestones`, {
-        method: "POST",
-        body:   JSON.stringify(formData),
-      });
-      setShowAddModal(false);
-      onMilestoneUpdate?.();
-    } catch (e) {
-      alert(`Failed to add milestone: ${e.message}`);
-    }
-  };
+  // ❌ REMOVED: handleAddMilestone — client no longer creates milestones.
+  // Milestone creation now lives entirely on the freelancer side
+  // (see FreelancerMilestonesSection.jsx → handleAddMilestone).
 
   // ── Request changes (no payment needed) ───────────────────────────────────
   const handleRequestChanges = async (milestoneId) => {
@@ -387,16 +378,14 @@ const MilestonesSection = ({ data, loading, error, projectId, onMilestoneUpdate 
           </div>
         </div>
 
+        {/* ✅ FIX: "+ Add milestone" button removed from client side entirely.
+            Client only views progress here now; freelancer proposes milestones. */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap gap-6 text-xs text-gray-500">
             <span className="flex items-center gap-2"><Calendar size={14} />Started: <strong className="text-gray-800">{summary.startedOn}</strong></span>
             <span className="flex items-center gap-2"><Clock size={14} />Deadline: <strong className="text-gray-800">{summary.deadline}</strong></span>
             <span className="flex items-center gap-2"><DollarSign size={14} />Duration: <strong className="text-gray-800">{summary.duration}</strong></span>
           </div>
-          <button onClick={() => setShowAddModal(true)}
-            className="bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold px-4 py-2 rounded-xl transition">
-            + Add milestone
-          </button>
         </div>
       </div>
 
@@ -408,7 +397,7 @@ const MilestonesSection = ({ data, loading, error, projectId, onMilestoneUpdate 
 
         {milestonesList.length === 0 && (
           <div className="py-16 border border-gray-100 rounded-2xl bg-gray-50/50 flex items-center justify-center">
-            <p className="text-gray-400 font-medium text-sm">No milestones added yet. Click "+ Add milestone" to get started.</p>
+            <p className="text-gray-400 font-medium text-sm">No milestones added yet. The freelancer will propose milestones for this project.</p>
           </div>
         )}
 
@@ -507,7 +496,7 @@ const MilestonesSection = ({ data, loading, error, projectId, onMilestoneUpdate 
                               : "Waiting for freelancer to submit work."}
                       </p>
 
-                      {/* ✅ Only show buttons when submitted */}
+                      {/* ✅ Only show buttons when submitted — payment/approval is client-only action */}
                       {ms.status === "submitted" && (
                         <>
                           <textarea
@@ -527,7 +516,7 @@ const MilestonesSection = ({ data, loading, error, projectId, onMilestoneUpdate 
                               {isLoading ? "..." : "Request changes"}
                             </button>
 
-                            {/* ✅ Approve & Pay — opens PaymentModal */}
+                            {/* ✅ Approve & Pay — opens PaymentModal. This is the ONLY point money moves. */}
                             <button
                               disabled={isLoading}
                               onClick={() => handleApproveAndPay(ms)}
@@ -547,7 +536,7 @@ const MilestonesSection = ({ data, loading, error, projectId, onMilestoneUpdate 
                       )}
                     </div>
 
-                    {/* Right — Payment details (10% fee) */}
+                    {/* Right — Payment details (5% fee) */}
                     <div className="border border-gray-100 rounded-2xl p-5">
                       <h4 className="font-bold text-gray-900 mb-5">Payment details</h4>
                       <div className="space-y-4 text-sm">
@@ -556,7 +545,7 @@ const MilestonesSection = ({ data, loading, error, projectId, onMilestoneUpdate 
                           <span className="font-semibold text-gray-900">₹{ms.budget.toLocaleString("en-IN")}</span>
                         </div>
                         <div className="flex justify-between text-xs text-gray-400">
-                          <span>Platform fee (10%) — from freelancer</span>
+                          <span>Platform fee ({PLATFORM_FEE_PCT}%) — from freelancer</span>
                           <span>-₹{platformFee.toLocaleString("en-IN")}</span>
                         </div>
                         <div className="border-t border-dashed pt-4 flex justify-between">
@@ -645,7 +634,7 @@ const MilestonesSection = ({ data, loading, error, projectId, onMilestoneUpdate 
         </div>
       </div>
 
-      {/* ✅ Payment Modal */}
+      {/* ✅ Payment Modal — only place client interacts with money */}
       {paymentModal && (
         <PaymentModal
           milestone={paymentModal.milestone}
@@ -659,12 +648,7 @@ const MilestonesSection = ({ data, loading, error, projectId, onMilestoneUpdate 
         />
       )}
 
-      {/* Add Milestone Modal — unchanged */}
-      <AddMilestoneModal
-        isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onSubmit={handleAddMilestone}
-      />
+      {/* ❌ REMOVED: <AddMilestoneModal /> — client no longer creates milestones */}
     </div>
   );
 };

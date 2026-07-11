@@ -14,8 +14,6 @@ const JobOverviewSection = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  
-
   useEffect(() => {
     const controller = new AbortController();
 
@@ -176,7 +174,9 @@ const JobOverviewSection = () => {
 
                   {/* Skills: Show 3 and count the rest */}
                   <div className="flex flex-wrap gap-2 mb-4 h-[32px] overflow-hidden">
-                    <span className="text-xs text-gray-500 mr-1 mt-2">Skills:</span>
+                    <span className="text-xs text-gray-500 mr-1 mt-2">
+                      Skills:
+                    </span>
                     {job.skills?.slice(0, 3).map((skill, i) => (
                       <span
                         key={i}
@@ -208,7 +208,10 @@ const JobOverviewSection = () => {
                       Job ID: {job.jobId}
                     </div>
                     <span className="font-bold text-gray-800 text-base">
-                      ₹{job.budget}
+                      ₹
+                      {activeTab === "current"
+                        ? job.finalBudget || job.budget
+                        : job.budget}
                     </span>
                   </div>
 

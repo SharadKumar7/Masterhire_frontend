@@ -133,18 +133,11 @@ const JobDetailsTab = ({ job, isApplied, isRejected, isSaved, onApply, onSave, b
         <p className="text-gray-600 text-[15px] leading-relaxed whitespace-pre-line">{job.description}</p>
       </section>
 
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-8 py-8 border-y border-gray-100">
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-8 py-8  border-y border-gray-100">
         <div className="flex items-start gap-3">
           <Banknote className="text-gray-400 mt-1" size={22} />
           <div>
             <p className="text-sm font-bold text-gray-800">Budget: ₹{job.budget || "1500"}</p>
-            <p className="text-xs text-gray-400">Negotiable</p>
-          </div>
-        </div>
-        <div className="flex items-start gap-3">
-          <Clock className="text-gray-400 mt-1" size={22} />
-          <div>
-            <p className="text-sm font-bold text-gray-800">Est. budget: ₹{job.budget || "1500"}</p>
             <p className="text-xs text-gray-400">Negotiable</p>
           </div>
         </div>

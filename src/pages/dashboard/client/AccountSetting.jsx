@@ -49,6 +49,23 @@ const loadRazorpayScript = () =>
     script.onerror = () => resolve(false);
     document.body.appendChild(script);
   });
+
+// 🩹 FIX — paymentMethod can arrive from the backend as either a plain string
+// ("Visa ending 4242") OR a structured object ({ type, last4, expiry }).
+// Rendering an object directly inside <p>{...}</p> crashes React
+// ("Objects are not valid as a React child"), which is what caused the blank
+// page. This helper always returns a safe, human-readable string.
+const formatPaymentMethod = (pm) => {
+  if (!pm) return "";
+  if (typeof pm === "string") return pm;
+  if (typeof pm === "object") {
+    const type   = pm.type || "Card";
+    const last4  = pm.last4  ? ` ending ${pm.last4}`   : "";
+    const expiry = pm.expiry ? ` (exp ${pm.expiry})`   : "";
+    return `${type}${last4}${expiry}`;
+  }
+  return String(pm);
+};
 // ──────────────────────────────────────────────────────────────────────────────
 
 const DEFAULT_NOTIFICATIONS = {
@@ -752,9 +769,13 @@ const AccountSettings = () => {
                 <p className="text-sm font-bold text-gray-900 mb-1">Saved Payment Method</p>
                 {editingField === "paymentMethod" ? (
                   <input className="font-medium border-b border-teal-500 outline-none"
-                    value={draft.paymentMethod || ""} onChange={(e) => setDraft({ ...draft, paymentMethod: e.target.value })}
+                    value={typeof draft.paymentMethod === "string" ? draft.paymentMethod : formatPaymentMethod(draft.paymentMethod)}
+                    onChange={(e) => setDraft({ ...draft, paymentMethod: e.target.value })}
                     placeholder="e.g. Visa ending 4242" autoFocus />
-                ) : <p className="font-medium">{userData.paymentMethod || "No payment method added"}</p>}
+                ) : (
+                  // 🩹 FIX — was rendering the raw object here, causing the crash.
+                  <p className="font-medium">{formatPaymentMethod(userData.paymentMethod) || "No payment method added"}</p>
+                )}
               </div>
               {editingField === "paymentMethod"
                 ? <button onClick={handleSavePaymentMethod} className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-bold">Save</button>
