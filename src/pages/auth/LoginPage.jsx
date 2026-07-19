@@ -10,18 +10,28 @@ const apiUrl = import.meta.env.VITE_API_URL;
 
 const MasterHireLoginPage = () => {
   const navigate = useNavigate();
-  const { progress, startLoading, stopLoading, nextStep } = useSignup();
+  // ✅ FIX: pull in `updateSignupData` — this is what actually persists
+  // fields (like email) into SignupContext / localStorage.
+  const { progress, startLoading, stopLoading, nextStep, updateSignupData } = useSignup();
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const { login, setUser, setToken } = useAuth();
 
   // ── helper: navigate based on role & profile ──────────────────────────────
-  const handleRedirect = (role, isProfileComplete) => {
+  // ✅ FIX: now accepts `email` and saves it (+ role) into SignupContext
+  // BEFORE navigating to the details page. Previously nothing wrote the
+  // email into context here, so by the time the freelancer details form
+  // called completeProfile(), signupData.email was still "" — the backend's
+  // `User.findOne({ email })` had nothing to match, so the profile never saved.
+  const handleRedirect = (role, isProfileComplete, email) => {
     if (role === "freelancer") {
       if (isProfileComplete) {
         navigate("/freelancer/dashboard");
       } else {
+        if (email) {
+          updateSignupData({ email, role });
+        }
         alert(
           "Please complete your freelancer profile details first and then log in again."
         );
@@ -46,7 +56,8 @@ const MasterHireLoginPage = () => {
 
 
       if (res.success) {
-        handleRedirect(res.role, res.isProfileComplete);
+        // ✅ FIX: pass the email the user just logged in with
+        handleRedirect(res.role, res.isProfileComplete, formData.email);
       } else {
         setError(res.message || "Invalid email or password");
       }
@@ -89,7 +100,12 @@ const MasterHireLoginPage = () => {
       });
 
 
-      handleRedirect(data.user.role, data.user.isProfileComplete);
+      // ✅ FIX: pass along the Google account's email too, if the backend
+      // response includes it (data.user.email). If it's not present, this
+      // safely no-ops (handleRedirect only calls updateSignupData when an
+      // email value exists) — worth double-checking your google-auth
+      // response actually returns `email` on data.user.
+      handleRedirect(data.user.role, data.user.isProfileComplete, data.user.email);
     } catch (err) {
       console.error("GOOGLE LOGIN ERROR:", err);
       setError("Google login failed. Please try again.");
