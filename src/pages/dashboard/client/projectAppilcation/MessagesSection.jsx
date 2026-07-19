@@ -23,12 +23,21 @@ const MessagesSection = ({ jobId, initialChatUser = null }) => {
   const [unreadMap, setUnreadMap]       = useState({});
   const [lastMsgMap, setLastMsgMap]     = useState({});
 
-  const messagesEndRef = useRef(null);
-  const fileInputRef   = useRef(null);
-  const pollRef        = useRef(null);
+  const messagesEndRef   = useRef(null);
+  const chatContainerRef = useRef(null); // ✅ FIX: to detect if user scrolled up
+  const fileInputRef     = useRef(null);
+  const pollRef          = useRef(null);
+  const prevMsgCountRef  = useRef(0);    // ✅ FIX: only scroll on real new messages
 
   const isRejected = selectedConv?.status === "rejected";
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+
+  // ✅ FIX: only "safe" to auto-scroll if user is already near the bottom
+  const isNearBottom = () => {
+    const el = chatContainerRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+  };
 
   // ── Fetch all applicants ────────────────────────────────────────────────────
   const fetchApplicants = useCallback(async () => {
@@ -89,7 +98,8 @@ const MessagesSection = ({ jobId, initialChatUser = null }) => {
       setMsgError(null);
       const res = await apiFetch(`/api/client/messages/${userId}?jobId=${jobId}`);
       setMessages(res.messages || []);
-      setTimeout(scrollToBottom, 100);
+      // ❌ REMOVED: setTimeout(scrollToBottom, 100) — was forcing scroll on
+      // every 5s poll even when nothing new arrived / user was reading history.
     } catch (e) {
       setMsgError(e.message);
     } finally {
@@ -101,12 +111,27 @@ const MessagesSection = ({ jobId, initialChatUser = null }) => {
 
   useEffect(() => {
     if (!selectedConv) return;
+    prevMsgCountRef.current = 0; // ✅ FIX: reset counter when switching conversations
     fetchMessages(selectedConv.userId);
     pollRef.current = setInterval(() => fetchMessages(selectedConv.userId), 5000);
     return () => clearInterval(pollRef.current);
   }, [selectedConv, fetchMessages]);
 
-  useEffect(() => { scrollToBottom(); }, [messages]);
+  // ✅ FIX (auto-scroll): only scroll when the message count actually grew,
+  // and only if it's our own message or the user was already near the bottom.
+  // Previously this ran on every `messages` change (including identical
+  // content re-fetched by the 5s poll), yanking the view down while reading.
+  useEffect(() => {
+    const newMessageArrived = messages.length > prevMsgCountRef.current;
+    if (newMessageArrived) {
+      const lastMsg = messages[messages.length - 1];
+      const isOwnMessage = (lastMsg?.senderRole || "").toLowerCase() === "client";
+      if (isOwnMessage || isNearBottom()) {
+        scrollToBottom();
+      }
+    }
+    prevMsgCountRef.current = messages.length;
+  }, [messages]);
 
   // ── Send message ────────────────────────────────────────────────────────────
   const handleSend = async (e) => {
@@ -135,7 +160,6 @@ const MessagesSection = ({ jobId, initialChatUser = null }) => {
     setSelectedFile(null);
     setFilePreview(null);
     setSending(true);
-    setTimeout(scrollToBottom, 50);
 
     try {
       if (sentFile) {
@@ -334,7 +358,7 @@ const MessagesSection = ({ jobId, initialChatUser = null }) => {
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2 bg-[#f0f4f8]">
+          <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-2 bg-[#f0f4f8]">
             {loadingMsgs ? (
               <div className="flex items-center justify-center h-full">
                 <Loader2 size={24} className="animate-spin text-teal-500" />
@@ -354,7 +378,11 @@ const MessagesSection = ({ jobId, initialChatUser = null }) => {
             ) : (
               <>
                 {messages.map((msg, idx) => {
-                  const isMe = msg.senderId === "me" || msg.senderRole === "client";
+                  // ✅ FIX (sender side glitch): rely only on senderRole, not
+                  // the short-lived "me" placeholder that only optimistic
+                  // messages carry — once the real message comes back from
+                  // the server/poll it no longer has senderId "me".
+                  const isMe = (msg.senderRole || "").toLowerCase() === "client";
                   const showDate =
                     idx === 0 ||
                     new Date(msg.createdAt).toDateString() !==

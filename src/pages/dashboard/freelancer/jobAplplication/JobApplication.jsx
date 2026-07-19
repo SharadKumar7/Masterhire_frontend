@@ -116,16 +116,16 @@ const JobDetailsTab = ({ job, isApplied, isRejected, isSaved, onApply, onSave, b
       <div>
         <div className="flex items-center justify-between gap-4 mb-2">
           <p className="text-xs text-gray-400 font-medium mb-5">
-          Posted {formatTimeAgo(job.postedTime)}
-        </p>
+            Posted {formatTimeAgo(job.postedTime)}
+          </p>
 
           <span className="shrink-0 text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full tracking-wide">
             JOB ID: {job.jobId}
           </span>
         </div>
         <h1 className="flex-1 text-2xl font-bold text-gray-800 leading-tight truncate">
-            {job.title}
-          </h1>
+          {job.title}
+        </h1>
       </div>
 
       <section>
@@ -138,7 +138,7 @@ const JobDetailsTab = ({ job, isApplied, isRejected, isSaved, onApply, onSave, b
           <Banknote className="text-gray-400 mt-1" size={22} />
           <div>
             <p className="text-sm font-bold text-gray-800">Budget: ₹{job.budget || "1500"}</p>
-            <p className="text-xs text-gray-400">Negotiable</p>
+            <p className="text-xs text-gray-400">{job.allowNegotiation ? "Negotiable" : "Fixed Price"}</p>
           </div>
         </div>
         <div className="flex items-start gap-3">
@@ -205,7 +205,7 @@ const JobDetailsTab = ({ job, isApplied, isRejected, isSaved, onApply, onSave, b
               <div>
                 <h3 className="text-md font-bold text-gray-800">Est. budget: ₹{job.budget || "1500"}</h3>
                 <p className="text-[10px] text-gray-400 font-bold">
-                  {job.isNegotiable ? "(Negotiable)" : "(Fixed Price)"}
+                  {job.allowNegotiation ? "(Negotiable)" : "(Fixed Price)"}
                 </p>
               </div>
               <button onClick={() => setShowModal(false)} className="text-gray-300 hover:text-gray-500">
@@ -218,9 +218,9 @@ const JobDetailsTab = ({ job, isApplied, isRejected, isSaved, onApply, onSave, b
               </div>
               <input type="number" value={bidAmount}
                 onChange={(e) => setBidAmount(e.target.value)}
-                disabled={!job.isNegotiable}
+                disabled={!job.allowNegotiation}
                 className={`w-full border-none rounded-xl py-4 pl-8 pr-12 font-bold text-gray-800 text-lg ${
-                  job.isNegotiable ? "bg-[#f3f4f6] focus:ring-2 focus:ring-teal-500" : "bg-gray-100 cursor-not-allowed"
+                  job.allowNegotiation ? "bg-[#f3f4f6] focus:ring-2 focus:ring-teal-500" : "bg-gray-100 cursor-not-allowed"
                 }`}
               />
               <div className="absolute inset-y-0 right-0 pr-4 flex items-center">
@@ -275,21 +275,31 @@ const MessagesTab = ({ jobId, clientInfo, isRejected }) => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [filePreview, setFilePreview]   = useState(null);
 
-  const messagesEndRef = useRef(null);
-  const textareaRef    = useRef(null);
-  const fileInputRef   = useRef(null);
-  const pollRef        = useRef(null);
-  const typingTimeout  = useRef(null);
-  const socketRef      = useRef(null);
+  const messagesEndRef   = useRef(null);
+  const chatContainerRef = useRef(null); // ✅ FIX: needed to detect if user has scrolled up
+  const textareaRef      = useRef(null);
+  const fileInputRef     = useRef(null);
+  const pollRef          = useRef(null);
+  const typingTimeout    = useRef(null);
+  const socketRef        = useRef(null);
+  const prevMsgCountRef  = useRef(0); // ✅ FIX: track count so we only scroll on truly new messages
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+
+  // ✅ FIX: only treated as "near bottom" (safe to auto-scroll) if within ~150px of the bottom
+  const isNearBottom = () => {
+    const el = chatContainerRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+  };
 
   const fetchMessages = useCallback(async () => {
     try {
       setError(null);
       const res = await apiFetch(`/api/freelancer/messages/${jobId}`);
       setMessages(res.messages || []);
-      setTimeout(scrollToBottom, 80);
+      // ❌ REMOVED: setTimeout(scrollToBottom, 80) — was forcing scroll on every 8s poll
+      // even when nothing new arrived / user was reading old messages.
     } catch (e) {
       setError(e.message);
     } finally {
@@ -303,7 +313,8 @@ const MessagesTab = ({ jobId, clientInfo, isRejected }) => {
     socket.emit("join_room", jobId);
     socket.on("receive_message", (msg) => {
       setMessages((prev) => [...prev, msg]);
-      setTimeout(scrollToBottom, 50);
+      // ❌ REMOVED: setTimeout(scrollToBottom, 50) — now handled by the
+      // length-aware effect below, which respects isNearBottom().
     });
     socket.on("user_typing",      () => { setTyping(true); setTimeout(() => setTyping(false), 3000); });
     socket.on("user_stop_typing", () => setTyping(false));
@@ -319,7 +330,24 @@ const MessagesTab = ({ jobId, clientInfo, isRejected }) => {
     };
   }, [fetchMessages, jobId]);
 
-  useEffect(() => { scrollToBottom(); }, [messages]);
+  // ✅ FIX (issue 1 — auto-scroll):
+  // Old code ran `scrollToBottom()` on every `messages` change, including the
+  // 8s poll (which replaces the array even with identical content), so the
+  // chat kept yanking you back down while reading. Now we only scroll when:
+  //  - the message count actually grew (a real new message arrived), AND
+  //  - it's either OUR own message, or the user was already near the bottom.
+  // This stops the constant forced scroll while still following live chat.
+  useEffect(() => {
+    const newMessageArrived = messages.length > prevMsgCountRef.current;
+    if (newMessageArrived) {
+      const lastMsg = messages[messages.length - 1];
+      const isOwnMessage = (lastMsg?.senderRole || "").toLowerCase() === "freelancer";
+      if (isOwnMessage || isNearBottom()) {
+        scrollToBottom();
+      }
+    }
+    prevMsgCountRef.current = messages.length;
+  }, [messages]);
 
   const handleSend = async (e) => {
     e?.preventDefault();
@@ -349,7 +377,6 @@ const MessagesTab = ({ jobId, clientInfo, isRejected }) => {
     setFilePreview(null);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     setSending(true);
-    setTimeout(scrollToBottom, 50);
 
     try {
       const formData = new FormData();
@@ -364,8 +391,12 @@ const MessagesTab = ({ jobId, clientInfo, isRejected }) => {
       });
       if (!res.ok) throw new Error("Failed to send");
       const data = await res.json();
-      setMessages((prev) => prev.map((m) => m._id === optimistic._id ? data.message : m));
-      socketRef.current?.emit("new_message", { jobId, message: data.message });
+      // ✅ FIX (issue 2 — sender side glitch): make sure the message that
+      // replaces the optimistic one always carries senderRole "freelancer",
+      // even if the backend response happens to omit/rename that field.
+      const confirmedMessage = { ...data.message, senderRole: data.message?.senderRole || "freelancer" };
+      setMessages((prev) => prev.map((m) => m._id === optimistic._id ? confirmedMessage : m));
+      socketRef.current?.emit("new_message", { jobId, message: confirmedMessage });
     } catch (e) {
       setMessages((prev) => prev.filter((m) => m._id !== optimistic._id));
       alert(`Failed to send: ${e.message}`);
@@ -433,7 +464,7 @@ const MessagesTab = ({ jobId, clientInfo, isRejected }) => {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-1 bg-[#f0f4f8]">
+      <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-1 bg-[#f0f4f8]">
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 size={24} className="animate-spin text-teal-500" />
@@ -450,7 +481,13 @@ const MessagesTab = ({ jobId, clientInfo, isRejected }) => {
         ) : (
           <>
             {messages.map((msg, idx) => {
-              const isMe = msg.senderId === "me" || msg.senderRole === "freelancer";
+              // ✅ FIX (issue 2 — sender side glitch): rely ONLY on senderRole.
+              // The old `msg.senderId === "me"` check only ever matched the
+              // short-lived optimistic message; once the real message came
+              // back from the server/poll (with a real senderId, no "me"),
+              // it silently fell through to senderRole — and if that field
+              // was ever missing/miscased, the message flipped to the left.
+              const isMe = (msg.senderRole || "").toLowerCase() === "freelancer";
               const showDate =
                 idx === 0 ||
                 new Date(msg.createdAt).toDateString() !== new Date(messages[idx - 1]?.createdAt).toDateString();

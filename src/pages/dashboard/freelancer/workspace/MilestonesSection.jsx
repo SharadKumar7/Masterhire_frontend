@@ -1,17 +1,15 @@
 // ─── FreelancerMilestonesSection.jsx ─────────────────────────────────────────
-// Freelancer view: PROPOSE milestones, submit work, upload files, view status, wait for approval.
-// ✅ FIX: "Add milestone" moved here from the client side. Freelancer creates the
-//    milestone and can immediately submit work for it — no client approval step
-//    is needed just to create it. Client only approves + pays once work is submitted.
+// Freelancer view: propose milestones, edit/delete before approval, submit
+// work, upload files, view status, wait for approval.
 import React, { useState, useRef } from "react";
 import {
   Calendar, Clock, DollarSign, Upload, Download,
-  ChevronDown, ChevronUp, Loader2, X, File,
+  ChevronDown, ChevronUp, Loader2, X, File, Pencil, Trash2,
 } from "lucide-react";
 import { Spinner, ErrorBanner, BASE_URL, getToken } from "../../shared/workspace/Shared";
 import AddMilestoneModal from "./AddMilestone";
 
-// ✅ FIX: single source of truth for platform fee — matches client side (5%)
+// Single source of truth for platform fee display — matches backend (5%)
 const PLATFORM_FEE_PCT = 5;
 
 const FreelancerMilestonesSection = ({ data, loading, error, projectId, onMilestoneUpdate }) => {
@@ -22,40 +20,88 @@ const FreelancerMilestonesSection = ({ data, loading, error, projectId, onMilest
   const [dragOver, setDragOver]                 = useState(false);
   const fileInputRef                            = useRef(null);
 
-  // ✅ Add milestone modal state (moved from client side)
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [addingMilestone, setAddingMilestone] = useState(false);
+  // Add / Edit milestone modal state
+  const [showAddModal, setShowAddModal]     = useState(false);
+  const [editingMilestone, setEditingMilestone] = useState(null); // null = create mode
+  const [savingMilestone, setSavingMilestone]   = useState(false);
+  const [deletingId, setDeletingId]             = useState(null);
 
   if (loading) return <Spinner text="Loading milestones..." />;
   if (error)   return <ErrorBanner message={error} />;
 
   const milestonesList   = data?.milestones   || [];
-  const summary          = data?.summary      || { totalBudget: 0, totalPaid: 0, totalRemaining: 0, overallProgress: 0, startedOn: "N/A", deadline: "N/A", duration: "N/A" };
+  const summary          = data?.summary      || {
+    totalBudget: 0, totalAllocated: 0, remainingToAllocate: 0,
+    totalPaid: 0, totalRemaining: 0, overallProgress: 0,
+    startedOn: "N/A", deadline: "N/A", duration: "N/A",
+  };
   const activityTimeline = data?.activityLog  || [];
 
   const toggleMilestone = (index) =>
     setOpenMilestoneIdx(openMilestoneIdx === index ? null : index);
 
-  // ✅ Add milestone — freelancer proposes a milestone for this job.
-  // Once created it lands in "pending" / "in progress" status, which `canSubmit`
-  // already allows, so the freelancer can submit work for it right away.
-  const handleAddMilestone = async (formData) => {
+  // ── Add milestone ───────────────────────────────────────────────────────────
+  const openAddModal = () => {
+    setEditingMilestone(null);
+    setShowAddModal(true);
+  };
+
+  // ✅ NEW — open modal in edit mode for a specific milestone
+  const openEditModal = (ms) => {
+    setEditingMilestone(ms);
+    setShowAddModal(true);
+  };
+
+  const closeModal = () => {
+    if (savingMilestone) return;
+    setShowAddModal(false);
+    setEditingMilestone(null);
+  };
+
+  // Handles both create (POST) and edit (PATCH), based on editingMilestone
+  const handleSaveMilestone = async (formData) => {
     try {
-      setAddingMilestone(true);
-      const res = await fetch(`${BASE_URL}/api/job/${projectId}/milestones`, {
-        method:  "POST",
+      setSavingMilestone(true);
+
+      const isEdit = Boolean(editingMilestone);
+      const url = isEdit
+        ? `${BASE_URL}/api/job/${projectId}/milestones/${editingMilestone._id}`
+        : `${BASE_URL}/api/job/${projectId}/milestones`;
+
+      const res = await fetch(url, {
+        method:  isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
         body:    JSON.stringify(formData),
       });
       const resData = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(resData.message || "Failed to add milestone");
+      if (!res.ok) throw new Error(resData.message || "Failed to save milestone");
 
       setShowAddModal(false);
+      setEditingMilestone(null);
       onMilestoneUpdate?.();
     } catch (e) {
-      alert(`Failed to add milestone: ${e.message}`);
+      alert(`Failed to save milestone: ${e.message}`);
     } finally {
-      setAddingMilestone(false);
+      setSavingMilestone(false);
+    }
+  };
+
+  // ✅ NEW — delete a milestone (only allowed while pending_approval; backend enforces too)
+  const handleDeleteMilestone = async (milestoneId) => {
+    if (!window.confirm("Delete this milestone? This cannot be undone.")) return;
+    try {
+      setDeletingId(milestoneId);
+      const res = await fetch(`${BASE_URL}/api/job/${projectId}/milestones/${milestoneId}`, {
+        method:  "DELETE",
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      const resData = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(resData.message || "Failed to delete milestone");
+      onMilestoneUpdate?.();
+    } catch (e) {
+      alert(`Failed to delete milestone: ${e.message}`);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -111,15 +157,22 @@ const FreelancerMilestonesSection = ({ data, loading, error, projectId, onMilest
         return <span className="bg-amber-50 text-amber-600 border border-amber-200 text-xs font-semibold px-3 py-1 rounded-full">● In Progress</span>;
       case "changes_requested":
         return <span className="bg-red-50 text-red-600 border border-red-200 text-xs font-semibold px-3 py-1 rounded-full">↩ Changes Requested</span>;
+      case "rejected":
+        return <span className="bg-red-50 text-red-600 border border-red-200 text-xs font-semibold px-3 py-1 rounded-full">✗ Rejected</span>;
+      case "pending_approval":
       default:
-        return <span className="bg-gray-100 text-gray-500 border border-gray-200 text-xs font-semibold px-3 py-1 rounded-full">● Pending</span>;
+        return <span className="bg-gray-100 text-gray-500 border border-gray-200 text-xs font-semibold px-3 py-1 rounded-full">⏳ Awaiting Client Approval</span>;
     }
   };
 
-  // Can freelancer submit? only if pending, in progress, or changes_requested
-  // ✅ Newly created milestones default to "pending", so they're immediately submittable — no client approval gate.
+  // ✅ FIX: can only submit once the client has approved the proposal —
+  // "pending_approval" removed from this list (it used to allow immediate
+  // submission with zero approval gate).
   const canSubmit = (status) =>
-    ["pending", "in progress", "changes_requested"].includes(status);
+    ["in progress", "changes_requested"].includes(status);
+
+  // ✅ NEW — edit/delete only allowed before client approval
+  const canEditOrDelete = (status) => status === "pending_approval";
 
   return (
     <div className="w-full space-y-8">
@@ -150,7 +203,6 @@ const FreelancerMilestonesSection = ({ data, loading, error, projectId, onMilest
           </div>
         </div>
 
-        {/* ✅ FIX: "+ Add milestone" now lives here on the freelancer side */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap gap-6 text-xs text-gray-500">
             <span className="flex items-center gap-2">
@@ -163,7 +215,7 @@ const FreelancerMilestonesSection = ({ data, loading, error, projectId, onMilest
               <DollarSign size={14} />Duration: <strong className="text-gray-800">{summary.duration}</strong>
             </span>
           </div>
-          <button onClick={() => setShowAddModal(true)}
+          <button onClick={openAddModal}
             className="bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold px-4 py-2 rounded-xl transition">
             + Add milestone
           </button>
@@ -185,6 +237,8 @@ const FreelancerMilestonesSection = ({ data, loading, error, projectId, onMilest
         {milestonesList.map((ms, index) => {
           const isOpen      = openMilestoneIdx === index;
           const isSubmitting = submitting === ms._id;
+          const isDeleting   = deletingId === ms._id;
+          const editable     = canEditOrDelete(ms.status);
           const dueDate     = ms.dueDate
             ? new Date(ms.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
             : "N/A";
@@ -210,6 +264,7 @@ const FreelancerMilestonesSection = ({ data, loading, error, projectId, onMilest
                     ms.status === "submitted"         ? "bg-blue-500 text-white"  :
                     ms.status === "in progress"       ? "bg-amber-500 text-white" :
                     ms.status === "changes_requested" ? "bg-red-500 text-white"   :
+                    ms.status === "rejected"          ? "bg-red-400 text-white"   :
                     "bg-gray-200 text-gray-600"
                   }`}>
                     {index + 1}
@@ -222,8 +277,39 @@ const FreelancerMilestonesSection = ({ data, loading, error, projectId, onMilest
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
                   {getStatusBadge(ms.status)}
+
+                  {/* ✅ NEW — edit/delete, only enabled while pending_approval */}
+                  {editable ? (
+                    <>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); openEditModal(ms); }}
+                        className="text-gray-400 hover:text-teal-600 p-1.5 rounded-lg hover:bg-gray-50 transition"
+                        title="Edit milestone"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <button
+                        disabled={isDeleting}
+                        onClick={(e) => { e.stopPropagation(); handleDeleteMilestone(ms._id); }}
+                        className="text-gray-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
+                        title="Delete milestone"
+                      >
+                        {isDeleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button disabled className="text-gray-200 p-1.5 cursor-not-allowed" title="Locked after approval">
+                        <Pencil size={15} />
+                      </button>
+                      <button disabled className="text-gray-200 p-1.5 cursor-not-allowed" title="Locked after approval">
+                        <Trash2 size={15} />
+                      </button>
+                    </>
+                  )}
+
                   {isOpen ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
                 </div>
               </div>
@@ -278,7 +364,7 @@ const FreelancerMilestonesSection = ({ data, loading, error, projectId, onMilest
 
                       {/* Client review note */}
                       {ms.reviewNote && (
-                        <div className={`rounded-xl p-3 ${ms.status === "changes_requested" ? "bg-red-50 border border-red-100" : "bg-gray-50 border border-gray-100"}`}>
+                        <div className={`rounded-xl p-3 ${["changes_requested", "rejected"].includes(ms.status) ? "bg-red-50 border border-red-100" : "bg-gray-50 border border-gray-100"}`}>
                           <p className="text-xs font-bold mb-1 text-gray-600">Client's note</p>
                           <p className="text-sm text-gray-700">{ms.reviewNote}</p>
                         </div>
@@ -291,8 +377,24 @@ const FreelancerMilestonesSection = ({ data, loading, error, projectId, onMilest
                         {ms.status === "approved"  ? "Work approved ✓" :
                          ms.status === "submitted" ? "Submitted — awaiting review" :
                          ms.status === "changes_requested" ? "Resubmit your work" :
+                         ms.status === "pending_approval" ? "Waiting for client approval" :
+                         ms.status === "rejected" ? "Milestone rejected" :
                          "Submit your work"}
                       </h4>
+
+                      {/* ✅ NEW — waiting-for-approval state */}
+                      {ms.status === "pending_approval" && (
+                        <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 text-sm text-amber-700">
+                          ⏳ Waiting for the client to approve this milestone. You can still edit or delete it until then.
+                        </div>
+                      )}
+
+                      {/* ✅ NEW — rejected state */}
+                      {ms.status === "rejected" && (
+                        <div className="bg-red-50 border border-red-100 rounded-xl p-4 text-sm text-red-700">
+                          ✗ This milestone was rejected by the client.
+                        </div>
+                      )}
 
                       {ms.status === "approved" && (
                         <div className="bg-green-50 border border-green-100 rounded-xl p-4 text-sm text-green-700">
@@ -461,11 +563,19 @@ const FreelancerMilestonesSection = ({ data, loading, error, projectId, onMilest
         </div>
       </div>
 
-      {/* ✅ Add Milestone Modal — freelancer proposes new milestones here */}
+      {/* ─── Add / Edit Milestone Modal ─────────────────────────────────────── */}
       <AddMilestoneModal
         isOpen={showAddModal}
-        onClose={() => !addingMilestone && setShowAddModal(false)}
-        onSubmit={handleAddMilestone}
+        onClose={closeModal}
+        onSubmit={handleSaveMilestone}
+        editingMilestone={editingMilestone}
+        // ✅ In edit mode, add back this milestone's own current budget so the
+        // cap check doesn't count it against itself.
+        remainingBudget={
+          editingMilestone
+            ? summary.remainingToAllocate + (editingMilestone.budget || 0)
+            : summary.remainingToAllocate
+        }
       />
     </div>
   );

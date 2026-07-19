@@ -130,6 +130,15 @@ const ApplicationTab = ({ jobId }) => {
   const clientLatest  = [...history].reverse().find((h) => h.proposedBy === "client");
   const myLatest      = [...history].reverse().find((h) => h.proposedBy === "freelancer");
 
+  // ✅ FIX (negotiation glitch): this is the single source of truth for "what is
+  // MY current offer" — always derived from the negotiation history (or the
+  // original bid if I haven't countered yet). Previously the UI displayed the
+  // raw `proposedAmount` input state instead, which also doubles as the
+  // editable draft value. That meant: type a new number, hit "Cancel", and the
+  // unsaved draft stayed on screen as if it were your real offer — sometimes
+  // making it look identical to the client's number by coincidence.
+  const myOfferAmount = myLatest?.proposedAmount ?? application.bidAmount;
+
   const formatDateTime = (iso) =>
     new Date(iso).toLocaleString("en-IN", {
       day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
@@ -187,17 +196,31 @@ const ApplicationTab = ({ jobId }) => {
                     className="w-24 border border-teal-400 rounded-lg px-2 py-1 text-sm font-bold focus:outline-none"
                     autoFocus
                   />
-                  <button onClick={() => setEditMode(false)} className="text-[10px] text-gray-400 ml-1">
+                  {/* ✅ FIX: Cancel now resets the draft back to your real last
+                      offer instead of leaving the unsaved typed value behind. */}
+                  <button
+                    onClick={() => {
+                      setEditMode(false);
+                      setProposedAmount(myOfferAmount?.toString() || "");
+                    }}
+                    className="text-[10px] text-gray-400 ml-1"
+                  >
                     Cancel
                   </button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
+                  {/* ✅ FIX: show myOfferAmount (derived from history), not the
+                      raw input state — that was the actual source of the glitch. */}
                   <p className="text-2xl font-black text-gray-900">
-                    ₹{Number(proposedAmount || application.bidAmount).toLocaleString("en-IN")}
+                    ₹{Number(myOfferAmount || 0).toLocaleString("en-IN")}
                   </p>
                   {canNegotiate && (
-                    <button onClick={() => setEditMode(true)}
+                    <button
+                      onClick={() => {
+                        setProposedAmount(myOfferAmount?.toString() || "");
+                        setEditMode(true);
+                      }}
                       className="flex items-center gap-1 text-teal-600 text-xs font-medium hover:text-teal-700">
                       <PencilIcon size={12} /> Edit
                     </button>

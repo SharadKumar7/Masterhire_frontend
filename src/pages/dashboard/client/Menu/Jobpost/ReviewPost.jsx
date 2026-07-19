@@ -285,9 +285,9 @@ const ReviewJobPost = () => {
                   <input
                     type="radio"
                     name="visibility"
-                    value="Invite only"
+                    value="invite-only"
                     disabled={!isEditing}
-                    checked={jobData.visibility === "Invite only"}
+                    checked={jobData.visibility === "invite-only"}
                     onChange={handleChange}
                     className="w-4 h-4 text-gray-800 focus:ring-black accent-teal-600"
                   />

@@ -129,12 +129,14 @@ const WorkspaceMessagesSection = ({
   const [incomingCall, setIncomingCall] = useState(null);
   const [callStartTime, setCallStartTime] = useState(null);
 
-  const messagesEndRef = useRef(null);
-  const textareaRef    = useRef(null);
-  const fileInputRef   = useRef(null);
-  const pollRef        = useRef(null);
-  const typingTimeout  = useRef(null);
-  const socketRef      = useRef(null);
+  const messagesEndRef   = useRef(null);
+  const chatContainerRef = useRef(null); // ✅ FIX: needed to detect if user scrolled up
+  const textareaRef      = useRef(null);
+  const fileInputRef     = useRef(null);
+  const pollRef          = useRef(null);
+  const typingTimeout    = useRef(null);
+  const socketRef        = useRef(null);
+  const prevMsgCountRef  = useRef(0);    // ✅ FIX: only scroll on genuinely new messages
 
   const otherPersonLabel = role === "client" ? "Hired Freelancer" : "Client";
 
@@ -151,6 +153,15 @@ const WorkspaceMessagesSection = ({
 
   const scrollToBottom = () =>
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+
+  // ✅ FIX: only "safe" to auto-scroll if the user is already within ~150px of
+  // the bottom — otherwise they're reading older messages and shouldn't be
+  // yanked down.
+  const isNearBottom = () => {
+    const el = chatContainerRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+  };
 
   // ── Save call log to DB + chat ────────────────────────────────────────────
   const saveCallLog = async ({ callType, callStatus, callDuration }) => {
@@ -173,7 +184,8 @@ const WorkspaceMessagesSection = ({
       if (!res.ok) return;
       const data = await res.json();
       setMessages(prev => [...prev, data.message]);
-      setTimeout(scrollToBottom, 50);
+      // ❌ REMOVED: setTimeout(scrollToBottom, 50) — the length-aware effect
+      // below now handles this (a call log is our own event, so it will scroll).
       // Also broadcast to other side via socket
       socketRef.current?.emit("new_message", { jobId: projectId, message: data.message });
     } catch (e) {
@@ -188,7 +200,8 @@ const WorkspaceMessagesSection = ({
       setError(null);
       const res = await apiFetch(`/api/client/messages/${freelancer._id}?jobId=${projectId}`);
       setMessages(res.messages || []);
-      setTimeout(scrollToBottom, 80);
+      // ❌ REMOVED: setTimeout(scrollToBottom, 80) — was forcing scroll on
+      // every 8s poll even when nothing new arrived / user was reading history.
     } catch (e) {
       setError(e.message);
     } finally {
@@ -205,7 +218,8 @@ const WorkspaceMessagesSection = ({
 
     socket.on("receive_message", (msg) => {
       setMessages(prev => [...prev, msg]);
-      setTimeout(scrollToBottom, 50);
+      // ❌ REMOVED: setTimeout(scrollToBottom, 50) — handled by the
+      // length-aware effect below, which respects isNearBottom().
     });
 
     socket.on("user_typing",      () => { setTyping(true); setTimeout(() => setTyping(false), 3000); });
@@ -248,7 +262,23 @@ const WorkspaceMessagesSection = ({
     };
   }, [fetchMessages, freelancer?._id, projectId]);
 
-  useEffect(() => { scrollToBottom(); }, [messages]);
+  // ✅ FIX (auto-scroll): old code ran `scrollToBottom()` on every `messages`
+  // change, including the 8s poll (which replaces the array even with
+  // identical content), forcing the chat to jump down while reading old
+  // messages. Now it only scrolls when:
+  //  - the message count actually grew (a real new message/call-log arrived), AND
+  //  - it's either OUR own message, or the user was already near the bottom.
+  useEffect(() => {
+    const newMessageArrived = messages.length > prevMsgCountRef.current;
+    if (newMessageArrived) {
+      const lastMsg = messages[messages.length - 1];
+      const isOwnMessage = checkIsMe(lastMsg);
+      if (isOwnMessage || isNearBottom()) {
+        scrollToBottom();
+      }
+    }
+    prevMsgCountRef.current = messages.length;
+  }, [messages]);
 
   // ── Accept call ─────────────────────────────────────────────────────────────
   const handleAcceptCall = () => {
@@ -310,7 +340,6 @@ const WorkspaceMessagesSection = ({
     setFilePreview(null);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     setSending(true);
-    setTimeout(scrollToBottom, 50);
 
     try {
       const formData = new FormData();
@@ -425,7 +454,7 @@ const WorkspaceMessagesSection = ({
         )}
 
         {/* ── Messages ───────────────────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-1 bg-[#f0f4f8]">
+        <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-1 bg-[#f0f4f8]">
           {loading ? (
             <div className="flex items-center justify-center h-full">
               <Loader2 size={24} className="animate-spin text-teal-500" />
