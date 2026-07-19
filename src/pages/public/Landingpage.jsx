@@ -287,7 +287,7 @@ const MasterHireLandingPage = () => {
         <div className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12 flex justify-between items-center py-20 min-h-[600px]">
           <div className="flex-1 max-w-xl">
             <div className="inline-flex items-center gap-2 bg-teal-500/10 border border-teal-500/20 text-teal-400 text-xs font-bold px-3 py-1.5 rounded-full mb-6">
-              🇮🇳 India's Talent Marketplace
+              🇮🇳 Made for Indians by Indians
             </div>
 
             <h1
@@ -299,7 +299,7 @@ const MasterHireLandingPage = () => {
 
             <div className="space-y-3 mb-8">
               {[
-                "Zero Platform Charges — Keep 100% of What You Earn",
+                "Minimal Platform Charges.",
                 "10,000+ Verified Indian Freelancers",
                 "Pay Only When You're 100% Happy",
                 "Any Job You Can Possibly Think Of",

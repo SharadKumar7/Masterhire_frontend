@@ -19,7 +19,7 @@ const LandingFooter = () => {
                 MasterHire
               </h2>
               <p className="text-gray-400 text-sm leading-relaxed max-w-xs">
-                India's own zero-fee freelance marketplace. Real work, real talent, zero platform charges.
+                India's own Minimal fees freelance marketplace. Real work, real talent, minimal platform charges.
               </p>
             </div>
 
@@ -121,7 +121,7 @@ const LandingFooter = () => {
           </p>
           <div className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 bg-teal-400 rounded-full animate-pulse" />
-            <span className="text-gray-500 text-xs">Zero platform fees — always</span>
+            <span className="text-gray-500 text-xs">Minimal Platform Charges — always</span>
           </div>
         </div>
       </div>
